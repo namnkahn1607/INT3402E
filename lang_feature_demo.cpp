@@ -1,7 +1,7 @@
 // This file features the C++ language subset this compiler project targets.
 //
 // Watch token stream:
-//   clang++ -fsyntax-only -Xclang -dump-tokens lang_feature_demo.cpp
+//   clang++ -fsyntax-only -Xclang -dump-tokens lang_feature_demo.cpp > token_stream.txt 2>&1
 
 // NOLINTBEGIN
 

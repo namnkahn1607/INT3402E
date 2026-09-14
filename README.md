@@ -4,8 +4,9 @@
 
 - Compiler: Clang 18.1.3
 - Generator: CMake 3.28.3
-- Build system: Ninja 1.11.1
+- Build system: ninja 1.11.1
 - Testing: [GoogleTest](https://github.com/google/googletest) v1.18.0
+- Lexer generator: [flex](https://github.com/westes/flex) 2.6.4
 
 ## Getting started
 
@@ -16,7 +17,7 @@ git clone --recurse-submodules <repo-url>
 cd INT3402E
 ```
 
-Already cloned without `--recurse-submodule`, pull them in:
+Already cloned without `--recurse-submodule`? Pull in:
 
 ```bash
 git submodule update --init --recursive
@@ -34,7 +35,7 @@ For a release build, simply swap `debug` for `release` in each command.
 
 ## Module structure
 
-The source code is organized by compiler pipeline stages
+The source code is organized by compiler pipeline stages.
 
 ```
 include/<stage>/ - public headers

@@ -12,7 +12,6 @@ Checks: >
   cppcoreguidelines-slicing,
   readability-else-after-return,
   readability-redundant-*,
-  readability-identifier-naming,
   -modernize-use-trailing-return-type,
   -bugprone-easily-swappable-parameters,
 

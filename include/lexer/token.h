@@ -1,6 +1,10 @@
 #pragma once
 
-enum class Token : int {
+#include <string>
+
+namespace lexer {
+
+enum class TokenType : int {
     unknown,
     eof,
 
@@ -54,3 +58,11 @@ enum class Token : int {
     ampamp,        // &&
     pipepipe       // ||
 };
+
+struct Token {
+    TokenType   kind;
+    std::string lexeme;
+    int         line, col;
+};
+
+}  // namespace lexer

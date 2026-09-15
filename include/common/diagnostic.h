@@ -27,7 +27,7 @@ public:
     // Summarizes compilation process. Only invoke upon halting.
     void Summarize() const noexcept;
 
-    bool HasErrors() const noexcept { return err_found_; }
+    [[nodiscard]] bool HasErrors() const noexcept { return err_found_; }
 
 private:
     int  warning_count_ = 0;

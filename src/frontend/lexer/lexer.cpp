@@ -14,11 +14,11 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
     if (src_text.size() >
         static_cast<std::size_t>(std::numeric_limits<int>::max())) {
         diag_.Report(
-            {0, 0, common::Severity::kError,
-             "source exceeds scanner size limit"}
+            {0, 0, common::Severity::kError, "source exceeds scanner limit"}
         );
         return {};
     }
+
     yyscan_t scanner = nullptr;
     if (yylex_init_extra(LexerExtra{}, &scanner) != 0) {
         diag_.Report(
@@ -26,6 +26,7 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
         );
         return {};
     }
+
     // Flex destroys its current buffer with the scanner, including on early
     // returns.
     const std::unique_ptr<void, decltype(&yylex_destroy)> owner(
@@ -45,6 +46,7 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
             ),
             yyget_lineno(scanner), yyget_extra(scanner).start_col
         };
+
         if (tok.kind == TokenKind::unknown) {
             diag_.Report(
                 {tok.line, tok.col, common::Severity::kError,
@@ -52,8 +54,10 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
             );
             return {};
         }
+
         tokens.push_back(std::move(tok));
     }
+
     return tokens;
 }
 

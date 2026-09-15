@@ -12,8 +12,10 @@ int main(int argc, char* argv[]) {
         std::cerr << "Usage: int3402e [source-file]\n";
         return 1;
     }
+
     common::DiagnosisEngine diag;
-    std::string             source;
+
+    std::string source;
     if (argc == 2) {
         auto loaded = common::LoadSourceFile(argv[1], diag);
         if (!loaded) {
@@ -28,15 +30,18 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
+
     lexer::Lexer lex{diag};
     const auto   tokens = lex.Tokenize(source);
     if (diag.HasErrors()) {
         diag.Summarize();
         return 1;
     }
+
     for (const auto& token : tokens) {
         std::cout << "token = " << static_cast<int>(token.kind)
                   << ", lexeme = \"" << token.lexeme << "\"\n";
     }
+
     return 0;
 }

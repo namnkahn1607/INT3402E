@@ -15,7 +15,7 @@ set(INSTALL_GTEST OFF CACHE BOOL "Disable GTest installation rules" FORCE)
 add_subdirectory(external/googletest)
 
 # --- Lexer auto-generator ---
-set(LEXER_DEF "${CMAKE_SOURCE_DIR}/src/lexer/lexer.ll")
+set(LEXER_DEF "${CMAKE_CURRENT_SOURCE_DIR}/src/lexer/lexer.ll")
 set(LEXER_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY ${LEXER_GEN_DIR})
 
@@ -37,8 +37,8 @@ target_compile_options(flag_lib INTERFACE
 )
 
 # --- Library targets ---
-set(PUBLIC_HEADER_ROOT "${CMAKE_SOURCE_DIR}/include")
-set(PUBLIC_SOURCE_ROOT "${CMAKE_SOURCE_DIR}/src")
+set(PUBLIC_HEADER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/include")
+set(PUBLIC_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 # Support
 add_library(support_lib STATIC

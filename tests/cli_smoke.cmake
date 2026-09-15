@@ -1,0 +1,42 @@
+execute_process(COMMAND "${PROGRAM}" INPUT_FILE "${INPUT}"
+    OUTPUT_VARIABLE output ERROR_VARIABLE error RESULT_VARIABLE result TIMEOUT 5)
+if(NOT result STREQUAL "0")
+    message(FATAL_ERROR "CLI failed or did not terminate: ${result} ${error}")
+endif()
+string(REGEX MATCHALL "token = " tokens "${output}")
+list(LENGTH tokens count)
+if(NOT count EQUAL 5 OR NOT output MATCHES "lexeme = \"ans\"")
+    message(FATAL_ERROR "Unexpected token output: ${output}")
+endif()
+
+# File arguments and stdin must exercise the same frontend.
+execute_process(COMMAND "${PROGRAM}" "${INPUT}"
+    OUTPUT_VARIABLE file_output RESULT_VARIABLE result TIMEOUT 5)
+if(NOT result STREQUAL "0" OR NOT file_output STREQUAL output)
+    message(FATAL_ERROR "File input failed or differs from stdin: ${result} ${file_output}")
+endif()
+
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cli-empty.cpp" "")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cli-invalid.cpp" "@")
+execute_process(COMMAND "${PROGRAM}" "${CMAKE_CURRENT_BINARY_DIR}/cli-empty.cpp"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output TIMEOUT 5)
+if(NOT result STREQUAL "0" OR NOT output STREQUAL "")
+    message(FATAL_ERROR "Empty input must succeed without tokens")
+endif()
+foreach(case IN ITEMS invalid missing arguments)
+    if(case STREQUAL "invalid")
+        set(args "${CMAKE_CURRENT_BINARY_DIR}/cli-invalid.cpp")
+        set(expected "unexpected token")
+    elseif(case STREQUAL "missing")
+        set(args "${CMAKE_CURRENT_BINARY_DIR}/nonexistent-directory/source.cpp")
+        set(expected "cannot open source")
+    else()
+        set(args "${INPUT}" "${INPUT}")
+        set(expected "Usage:")
+    endif()
+    execute_process(COMMAND "${PROGRAM}" ${args}
+        RESULT_VARIABLE result ERROR_VARIABLE error TIMEOUT 5)
+    if(NOT result STREQUAL "1" OR NOT error MATCHES "${expected}")
+        message(FATAL_ERROR "Unexpected ${case} result: ${result} ${error}")
+    endif()
+endforeach()

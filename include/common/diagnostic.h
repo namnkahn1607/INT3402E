@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace support {
+namespace common {
 
 enum class Severity {
     kWarning,
@@ -27,9 +27,11 @@ public:
     // Summarizes compilation process. Only invoke upon halting.
     void Summarize() const noexcept;
 
+    bool HasErrors() const noexcept { return err_found_; }
+
 private:
     int  warning_count_ = 0;
     bool err_found_     = false;
 };
 
-}  // namespace support
+}  // namespace common

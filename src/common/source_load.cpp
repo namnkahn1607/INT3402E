@@ -1,4 +1,4 @@
-#include "support/source_load.h"
+#include "common/source_load.h"
 
 #include <fstream>
 #include <ios>
@@ -6,9 +6,9 @@
 #include <string>
 #include <utility>
 
-#include "support/diagnostic.h"
+#include "common/diagnostic.h"
 
-namespace support {
+namespace common {
 
 std::optional<SourceBuf> LoadSourceFile(
     const std::string& path, DiagnosisEngine& diag
@@ -21,6 +21,12 @@ std::optional<SourceBuf> LoadSourceFile(
 
     file.seekg(0, std::ios::end);
     std::streamsize size = file.tellg();
+    if (size < 0) {
+        diag.Report(
+            {0, 0, Severity::kError, "cannot determine source size: " + path}
+        );
+        return std::nullopt;
+    }
     file.seekg(0, std::ios::beg);
 
     std::string content(static_cast<size_t>(size), '\0');
@@ -32,4 +38,4 @@ std::optional<SourceBuf> LoadSourceFile(
     return SourceBuf{path, std::move(content)};
 }
 
-}  // namespace support
+}  // namespace common

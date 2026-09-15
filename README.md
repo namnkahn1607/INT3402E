@@ -1,61 +1,125 @@
-# C++ to RISC-V Compiler
+# C++ to RISC-V compiler
 
-## Toolchain & dependencies
+Educational compiler project. Currently implements a Flex lexer and a token-dump
+CLI; parsing, semantic analysis, and code generation are future work.
 
-- __Compiler__: Clang 18.1.3
-- __Generator__: CMake 3.28.3
-- __Build system__: ninja 1.11.1
-- __Testing__: [GoogleTest](https://github.com/google/googletest) v1.18.0
-- __Lexer generator__: [flex](https://github.com/westes/flex) 2.6.4
+## Quick start
 
-## Getting started
+Development environments: Arch Linux and Ubuntu 24.04. The automated CI
+baseline is Ubuntu 24.04, GCC and Clang, Debug and Release. Windows contributors can use WSL2
+with Ubuntu. Other native platforms are not yet validated.
 
-Clone with submodules in one step:
+Requirements: CMake >= 3.28, Ninja, a C++20 compiler, Flex >= 2.6, and Git.
+On Arch Linux (updates the system as well as installing build tools):
 
-```bash
-git clone --recurse-submodules <repo-url>
-cd INT3402E
+```sh
+sudo pacman -Syu --needed base-devel clang cmake ninja flex git
 ```
 
-Already cloned without `--recurse-submodule`? Pull them in:
+On Ubuntu 24.04:
 
-```bash
-git submodule update --init --recursive
+```sh
+sudo apt-get update
+sudo apt-get install -y build-essential clang cmake ninja-build flex git
 ```
 
-Configure, build and test (Debug is the default preset):
+Both distributions use the same commands below. Ubuntu installations must meet
+the CMake >= 3.28 requirement; the package instructions target Ubuntu 24.04.
 
-```bash
+Clone normally; no submodules are required. From the repository root:
+
+```sh
 cmake --preset debug
-cmake --build --preset debug
+cmake --build --preset debug --parallel
 ctest --preset debug
+printf 'int answer = 42;\n' | ./build/debug/src/int3402e
 ```
 
-Try it out:
+The CLI also accepts a source file:
 
-```bash
-./bin/debug/int3402e <source-file>
+```sh
+./build/debug/src/int3402e tests/fixtures/simple.cpp
 ```
 
-For a release build, simply swap `debug` for `release` in each command.
+It prints tokens to stdout and diagnostics to stderr. Empty input succeeds;
+file-read failures, invalid arguments, and lexical errors return a nonzero status.
 
-## Module structure
+Replace `debug` with `release` for an optimized build. Presets must be selected
+explicitly. CMake chooses the system compiler; to choose Clang, use
+`CXX=clang++ cmake --preset debug` on the first configure of a fresh build directory.
+Use a separate build directory when changing compilers. Personal presets belong
+in ignored `CMakeUserPresets.json`. clangd reads `build/debug/compile_commands.json`.
 
-The source code is organized by compiler pipeline stages.
-Each _stage_ has a corresponding _module_.
+Tests download GoogleTest **v1.17.0**, pinned to commit
+`52eb8108c5bdec04579160ae17225d66034bd723`, on first configure. GitHub access is
+required then. Builds reuse the downloaded source. For offline development, pass
+`-DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/absolute/path/to/googletest` to configure
+with a local checkout of that commit. Dependency upgrades are explicit reviewed
+changes to `tests/CMakeLists.txt`.
 
+To build just the CLI, without downloading GoogleTest:
+
+```sh
+cmake -S . -B build/no-tests -G Ninja -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build build/no-tests --parallel
 ```
-include/<module>/ - public headers
-src/<module>/     - implementation (including unit tests)
+
+## Repository layout
+
+```text
+CMakeLists.txt             Project settings and component orchestration
+CMakePresets.json          Shared configure/build/test commands
+include/frontend/lexer/   Public lexer and token API
+include/common/           Shared diagnostics and source-loading API
+src/main.cpp               Compiler CLI entry point
+src/frontend/lexer/       C++ lexer wrapper, Flex grammar, and private headers
+src/common/               Shared diagnostics and source loading
+src/backend/              Backend component registration
+tests/frontend/lexer/     Lexer unit tests
+tests/                    CLI smoke test and input fixtures
+.github/workflows/        Automated build and test checks
+build/<preset>/           Ignored generated sources, dependencies, binaries
 ```
 
-Module                 | Pipeline
----------------------- | ----------------------------------------
-[ast](src/ast)         | AST node types
-[lexer](src/lexer)     | Source text -> token stream
-[parser](src/parser)   | Token stream -> AST
-[sema](src/sema)       | Semantic analysis / AST type checking
-[ir](src/ir)           | Intermediate representation
-[opt](src/opt)         | Optimizations
-[codegen](src/codegen) | IR -> RISC-V assembly
-[support](src/support) | Shared utility: diagnostic, reporting...
+The frontend owns source-language processing: lexing, parsing, AST, and semantic
+analysis. The backend owns target-specific lowering and code generation. The CLI
+coordinates these components. The backend currently has no implementation target.
+
+Use `include/<area>/<component>/`, `src/<area>/<component>/`, and
+`tests/<area>/<component>/`. Keep implementation-only headers beside their sources.
+Each implemented component owns a library target and declares its dependencies.
+The `common` library provides diagnostics and source loading for the CLI and
+compiler components. It must not depend on frontend or backend code. Cross-stage IR and
+optimization boundaries should be defined when those components are implemented.
+
+## How the build works
+
+1. **Configure:** CMake reads the preset, checks the compiler and Flex, creates
+   targets and writes Ninja build rules. CTest enables `BUILD_TESTING` by default;
+   only that branch fetches GoogleTest and defines test targets.
+2. **Generate:** Ninja runs Flex on `src/frontend/lexer/lexer.ll` to produce
+   `lexer.yy.cpp` and `lexer.yy.h` under the build directory. CMake tracks these
+   outputs so a grammar change reruns Flex before affected targets compile.
+3. **Compile and link:** Generated C++ becomes the private `lexer_generated`
+   library. The C++ `lexer` library (`INT3402E::lexer`) links it and the shared
+   `common` library (`INT3402E::common`). The CLI and lexer tests link `lexer`.
+   C++20 and public header paths follow the library dependencies. Warning flags are private to
+   handwritten-code targets; generated Flex and GoogleTest code are excluded.
+4. **Test:** CTest runs the GoogleTest cases and a CLI smoke test that checks
+   output and termination. Timeouts prevent an EOF regression from hanging CI.
+   Test presets fail if no tests are discovered.
+
+`include/frontend/lexer/lexer.h` exposes the C++ tokenization API. Flex headers
+and scanner state remain private to the lexer implementation.
+
+## CI and collaboration
+
+GitHub Actions runs on pushes, pull requests, and manual dispatch. It builds and
+tests GCC/Clang × Debug/Release with handwritten-code warnings treated as errors,
+and checks a build with testing disabled. Action dependencies are pinned to
+commits and Dependabot proposes their updates. The token has read-only access.
+Local and CI builds use the same presets. This is a reproducible build recipe,
+not a bit-for-bit hermetic toolchain: runner packages receive updates.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the review workflow, required GitHub
+checks, and build conventions.

@@ -1,6 +1,6 @@
 %top{
-#include "lexer/lexer_extra.h"
-#include "lexer/token.h" /* TokenKind enum comes here */
+#include "lexer_extra.h"
+#include "frontend/lexer/token.h" /* TokenKind enum comes here */
 }
 
 %{
@@ -21,7 +21,10 @@
 %{
 #define YY_USER_ACTION \
     yyextra.start_col = yyextra.next_col; \
-    yyextra.next_col += yyleng;
+    for (int i = 0; i < yyleng; ++i) { \
+        if (yytext[i] == '\n') yyextra.next_col = 1; \
+        else ++yyextra.next_col; \
+    }
 %}
 
 DIGIT   [0-9]

@@ -1,8 +1,8 @@
-#include "support/diagnostic.h"
+#include "common/diagnostic.h"
 
 #include <iostream>
 
-namespace support {
+namespace common {
 
 bool DiagnosisEngine::Report(const Diagnostic& d) noexcept {
     const char* tag;
@@ -27,4 +27,4 @@ void DiagnosisEngine::Summarize() const noexcept {
     std::cerr << "\n";
 }
 
-}  // namespace support
+}  // namespace common

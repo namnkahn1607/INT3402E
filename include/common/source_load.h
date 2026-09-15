@@ -3,9 +3,9 @@
 #include <optional>
 #include <string>
 
-#include "support/diagnostic.h"
+#include "common/diagnostic.h"
 
-namespace support {
+namespace common {
 
 struct SourceBuf {
     std::string path;
@@ -17,4 +17,4 @@ std::optional<SourceBuf> LoadSourceFile(
     const std::string& path, DiagnosisEngine& diag
 );
 
-}  // namespace support
+}  // namespace common

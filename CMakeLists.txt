@@ -41,7 +41,10 @@ set(PUBLIC_HEADER_ROOT "${CMAKE_SOURCE_DIR}/include")
 set(PUBLIC_SOURCE_ROOT "${CMAKE_SOURCE_DIR}/src")
 
 # Support
-add_library(support_lib STATIC "${PUBLIC_SOURCE_ROOT}/support/diagnostic.cpp")
+add_library(support_lib STATIC
+    "${PUBLIC_SOURCE_ROOT}/support/diagnostic.cpp"
+    "${PUBLIC_SOURCE_ROOT}/support/source_load.cpp"
+)
 target_include_directories(support_lib PUBLIC "${PUBLIC_HEADER_ROOT}")
 target_link_libraries(support_lib PRIVATE flag_lib)
 

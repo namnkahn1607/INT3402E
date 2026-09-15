@@ -1,8 +1,14 @@
-#include <iostream>
+#include "support/diagnostic.h"
+#include "support/source_load.h"
 
-int main() {
-    std::cout << "Unsatisfied with constant time, Jeff Dean created the "
-                 "world's first O(1/n) algorithm."
-              << std::endl;
+int main([[maybe_unused]] int argc, char* argv[]) {
+    support::DiagnosisEngine diag;
+
+    auto opt_src = support::LoadSourceFile(argv[1], diag);
+    if (!opt_src.has_value()) {
+        diag.Summarize();
+        return 1;
+    }
+
     return 0;
 }

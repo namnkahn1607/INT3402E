@@ -40,6 +40,11 @@ target_compile_options(flag_lib INTERFACE
 set(PUBLIC_HEADER_ROOT "${CMAKE_SOURCE_DIR}/include")
 set(PUBLIC_SOURCE_ROOT "${CMAKE_SOURCE_DIR}/src")
 
+# Support
+add_library(support_lib STATIC "${PUBLIC_SOURCE_ROOT}/support/diagnostic.cpp")
+target_include_directories(support_lib PUBLIC "${PUBLIC_HEADER_ROOT}")
+target_link_libraries(support_lib PRIVATE flag_lib)
+
 # Generated lexer
 add_library(lexer_gen_lib STATIC "${LEXER_GEN_SOURCE}")
 target_include_directories(lexer_gen_lib
@@ -57,11 +62,12 @@ target_link_libraries(lexer_gen_lib PRIVATE flag_lib)
 add_executable(int3402e src/main.cpp)
 target_link_libraries(int3402e PRIVATE
     flag_lib
+    support_lib
     # lexer_lib
 )
 
 # --- Testing ---
-include(${CMAKE_SOURCE_DIR}/Testing.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/Testing.cmake)
 include(GoogleTest)
 
 # add_unit_test(<target_name> <module_name>

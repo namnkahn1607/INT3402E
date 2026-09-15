@@ -2,11 +2,11 @@
 
 ## Toolchain & dependencies
 
-- Compiler: Clang 18.1.3
-- Generator: CMake 3.28.3
-- Build system: ninja 1.11.1
-- Testing: [GoogleTest](https://github.com/google/googletest) v1.18.0
-- Lexer generator: [flex](https://github.com/westes/flex) 2.6.4
+- __Compiler__: Clang 18.1.3
+- __Generator__: CMake 3.28.3
+- __Build system__: ninja 1.11.1
+- __Testing__: [GoogleTest](https://github.com/google/googletest) v1.18.0
+- __Lexer generator__: [flex](https://github.com/westes/flex) 2.6.4
 
 ## Getting started
 
@@ -17,7 +17,7 @@ git clone --recurse-submodules <repo-url>
 cd INT3402E
 ```
 
-Already cloned without `--recurse-submodule`? Pull in:
+Already cloned without `--recurse-submodule`? Pull them in:
 
 ```bash
 git submodule update --init --recursive
@@ -31,19 +31,26 @@ cmake --build --preset debug
 ctest --preset debug
 ```
 
+Try it out:
+
+```bash
+./bin/debug/int3402e <source-file>
+```
+
 For a release build, simply swap `debug` for `release` in each command.
 
 ## Module structure
 
 The source code is organized by compiler pipeline stages.
+Each _stage_ has a corresponding _module_.
 
 ```
-include/<stage>/ - public headers
-src/<stage>/     - implementation (including unit tests)
+include/<module>/ - public headers
+src/<module>/     - implementation (including unit tests)
 ```
 
-Stage                  | Pipeline
----------------------- | -------------------------------------
+Module                 | Pipeline
+---------------------- | ----------------------------------------
 [ast](src/ast)         | AST node types
 [lexer](src/lexer)     | Source text -> token stream
 [parser](src/parser)   | Token stream -> AST
@@ -51,3 +58,4 @@ Stage                  | Pipeline
 [ir](src/ir)           | Intermediate representation
 [opt](src/opt)         | Optimizations
 [codegen](src/codegen) | IR -> RISC-V assembly
+[support](src/support) | Shared utility: diagnostic, reporting...

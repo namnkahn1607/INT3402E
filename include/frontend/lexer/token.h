@@ -1,6 +1,10 @@
 #pragma once
 
-enum class Token : int {
+#include <string>
+
+namespace lexer {
+
+enum class TokenKind : int {
     unknown,
     eof,
 
@@ -26,9 +30,11 @@ enum class Token : int {
     kw_void,      // void
     kw_while,     // while
 
-    // Starts with an alpha, then alnum(s). Dash allowed.
+    // Starts with a letter or underscore, followed by letters, digits, or
+    // underscores.
     identifier,
-    // Integers, floating-point, scientific notation and literals.
+    // Decimal integers and floating-point constants with an optional f/F
+    // suffix.
     numeric_constant,
 
     l_paren,  // (
@@ -36,7 +42,7 @@ enum class Token : int {
     l_brace,  // {
     r_brace,  // }
     semi,     // ;
-    colon,    // ,
+    colon,    // :
 
     equalequal,    // ==
     equal,         // =
@@ -54,3 +60,11 @@ enum class Token : int {
     ampamp,        // &&
     pipepipe       // ||
 };
+
+struct Token {
+    TokenKind   kind;
+    std::string lexeme;
+    int         line, col;
+};
+
+}  // namespace lexer

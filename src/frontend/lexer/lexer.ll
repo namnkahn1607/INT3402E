@@ -1,8 +1,10 @@
-%{
-#include "frontend/lexer/lexer_extra.h"
-#include "frontend/lexer/token.h" /* Token enum comes from here */
+%top{
+#include "lexer_extra.h"
+#include "frontend/lexer/token.h" /* TokenKind enum comes here */
+}
 
-#define TOK(x) return static_cast<int>(Token::x)
+%{
+#define TOK(x) return static_cast<int>(lexer::TokenKind::x)
 %}
 
 %option noyywrap
@@ -19,7 +21,10 @@
 %{
 #define YY_USER_ACTION \
     yyextra.start_col = yyextra.next_col; \
-    yyextra.next_col += yyleng;
+    for (int i = 0; i < yyleng; ++i) { \
+        if (yytext[i] == '\n') yyextra.next_col = 1; \
+        else ++yyextra.next_col; \
+    }
 %}
 
 DIGIT   [0-9]

@@ -32,8 +32,17 @@ Clone normally; no submodules are required. From the repository root:
 cmake --preset debug
 cmake --build --preset debug --parallel
 ctest --preset debug
-echo "int answer = 42;\n" | ./build/debug/src/int3402e
+printf 'int answer = 42;\n' | ./build/debug/src/int3402e
 ```
+
+The CLI also accepts a source file:
+
+```sh
+./build/debug/src/int3402e tests/fixtures/simple.cpp
+```
+
+It prints tokens to stdout and diagnostics to stderr. Empty input succeeds;
+file-read failures, invalid arguments, and lexical errors return a nonzero status.
 
 Replace `debug` with `release` for an optimized build. Presets must be selected
 explicitly. CMake chooses the system compiler; to choose Clang, use
@@ -58,16 +67,18 @@ cmake --build build/no-tests --parallel
 ## Repository layout
 
 ```text
-CMakeLists.txt              Project settings and component orchestration
-CMakePresets.json           Shared configure/build/test commands
-include/frontend/lexer/    Public lexer headers
-src/main.cpp                Compiler CLI entry point
-src/frontend/lexer/        Flex grammar and lexer library build
-src/backend/               Backend component registration
+CMakeLists.txt             Project settings and component orchestration
+CMakePresets.json          Shared configure/build/test commands
+include/frontend/lexer/   Public lexer and token API
+include/common/           Shared diagnostics and source-loading API
+src/main.cpp               Compiler CLI entry point
+src/frontend/lexer/       C++ lexer wrapper, Flex grammar, and private headers
+src/common/               Shared diagnostics and source loading
+src/backend/              Backend component registration
 tests/frontend/lexer/     Lexer unit tests
 tests/                    CLI smoke test and input fixtures
-.github/workflows/         Automated build and test checks
-build/<preset>/            Ignored generated sources, dependencies, binaries
+.github/workflows/        Automated build and test checks
+build/<preset>/           Ignored generated sources, dependencies, binaries
 ```
 
 The frontend owns source-language processing: lexing, parsing, AST, and semantic
@@ -77,8 +88,8 @@ coordinates these components. The backend currently has no implementation target
 Use `include/<area>/<component>/`, `src/<area>/<component>/`, and
 `tests/<area>/<component>/`. Keep implementation-only headers beside their sources.
 Each implemented component owns a library target and declares its dependencies.
-Add `common` only when multiple components need a concrete shared facility;
-common code must not depend on frontend or backend code. Cross-stage IR and
+The `common` library provides diagnostics and source loading for the CLI and
+compiler components. It must not depend on frontend or backend code. Cross-stage IR and
 optimization boundaries should be defined when those components are implemented.
 
 ## How the build works
@@ -89,16 +100,17 @@ optimization boundaries should be defined when those components are implemented.
 2. **Generate:** Ninja runs Flex on `src/frontend/lexer/lexer.ll` to produce
    `lexer.yy.cpp` and `lexer.yy.h` under the build directory. CMake tracks these
    outputs so a grammar change reruns Flex before affected targets compile.
-3. **Compile and link:** Generated C++ becomes the static `lexer` library
-   (`INT3402E::lexer` alias). The CLI and lexer tests link it. C++20 and public
-   header paths follow the library dependency. Warning flags are private to
+3. **Compile and link:** Generated C++ becomes the private `lexer_generated`
+   library. The C++ `lexer` library (`INT3402E::lexer`) links it and the shared
+   `common` library (`INT3402E::common`). The CLI and lexer tests link `lexer`.
+   C++20 and public header paths follow the library dependencies. Warning flags are private to
    handwritten-code targets; generated Flex and GoogleTest code are excluded.
 4. **Test:** CTest runs the GoogleTest cases and a CLI smoke test that checks
    output and termination. Timeouts prevent an EOF regression from hanging CI.
    Test presets fail if no tests are discovered.
 
-`include/frontend/lexer/scanner.h` exposes the Flex scanner API and supplies its
-required state declaration.
+`include/frontend/lexer/lexer.h` exposes the C++ tokenization API. Flex headers
+and scanner state remain private to the lexer implementation.
 
 ## CI and collaboration
 

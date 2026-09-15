@@ -2,4 +2,5 @@
 .vscode/
 bin/
 
+lang_feature_demo.cpp
 token_stream.txt

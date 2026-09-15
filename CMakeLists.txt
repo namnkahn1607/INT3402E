@@ -48,18 +48,16 @@ add_library(support_lib STATIC
 target_include_directories(support_lib PUBLIC "${PUBLIC_HEADER_ROOT}")
 target_link_libraries(support_lib PRIVATE flag_lib)
 
-# Generated lexer
-add_library(lexer_gen_lib STATIC "${LEXER_GEN_SOURCE}")
-target_include_directories(lexer_gen_lib PRIVATE "${PUBLIC_HEADER_ROOT}")
-target_link_libraries(lexer_gen_lib PRIVATE flag_lib)
-
 # Lexer
-add_library(lexer_lib STATIC "${PUBLIC_SOURCE_ROOT}/lexer/lexer.cpp")
+add_library(lexer_lib STATIC 
+    "${PUBLIC_SOURCE_ROOT}/lexer/lexer.cpp"
+    "${LEXER_GEN_SOURCE}"
+)
 target_include_directories(lexer_lib
     PUBLIC "${PUBLIC_HEADER_ROOT}"
     PRIVATE "${LEXER_GEN_DIR}"
 )
-target_link_libraries(lexer_lib PRIVATE flag_lib lexer_gen_lib)
+target_link_libraries(lexer_lib PRIVATE flag_lib)
 
 # --- Final executable ---
 add_executable(int3402e src/main.cpp)

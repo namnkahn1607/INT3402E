@@ -1,8 +1,10 @@
-%{
-#include "lexer_extra.h"
-#include "token.h" /* TokenType enum comes here */
+%top{
+#include "lexer/lexer_extra.h"
+#include "lexer/token.h" /* TokenKind enum comes here */
+}
 
-#define TOK(x) return static_cast<int>(lexer::TokenType::x)
+%{
+#define TOK(x) return static_cast<int>(lexer::TokenKind::x)
 %}
 
 %option noyywrap

@@ -4,7 +4,7 @@
 
 namespace lexer {
 
-enum class TokenType : int {
+enum class TokenKind : int {
     unknown,
     eof,
 
@@ -60,7 +60,7 @@ enum class TokenType : int {
 };
 
 struct Token {
-    TokenType   kind;
+    TokenKind   kind;
     std::string lexeme;
     int         line, col;
 };

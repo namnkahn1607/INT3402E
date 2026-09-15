@@ -1,6 +1,6 @@
 %{
-#include "lexer_extra.h"
-#include "token.h" /* Token enum comes from here */
+#include "frontend/lexer/lexer_extra.h"
+#include "frontend/lexer/token.h" /* Token enum comes from here */
 
 #define TOK(x) return static_cast<int>(Token::x)
 %}

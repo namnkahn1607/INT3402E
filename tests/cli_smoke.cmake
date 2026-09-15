@@ -1,0 +1,10 @@
+execute_process(COMMAND "${PROGRAM}" INPUT_FILE "${INPUT}"
+    OUTPUT_VARIABLE output ERROR_VARIABLE error RESULT_VARIABLE result TIMEOUT 5)
+if(NOT result STREQUAL "0")
+    message(FATAL_ERROR "CLI failed or did not terminate: ${result} ${error}")
+endif()
+string(REGEX MATCHALL "token = " tokens "${output}")
+list(LENGTH tokens count)
+if(NOT count EQUAL 5 OR NOT output MATCHES "lexeme = \"ans\"")
+    message(FATAL_ERROR "Unexpected token output: ${output}")
+endif()

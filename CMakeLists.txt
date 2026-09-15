@@ -15,7 +15,7 @@ set(INSTALL_GTEST OFF CACHE BOOL "Disable GTest installation rules" FORCE)
 add_subdirectory(external/googletest)
 
 # --- Lexer auto-generator ---
-set(LEXER_DEF "${CMAKE_CURRENT_SOURCE_DIR}/src/lexer/lexer.ll")
+set(LEXER_DEF "${CMAKE_SOURCE_DIR}/src/lexer/lexer.ll")
 set(LEXER_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY ${LEXER_GEN_DIR})
 
@@ -23,8 +23,6 @@ set(LEXER_GEN_HEADER "${LEXER_GEN_DIR}/lexer.yy.h")
 set(LEXER_GEN_SOURCE "${LEXER_GEN_DIR}/lexer.yy.cpp") # Force C++
 
 find_program(FLEX_EXEC flex REQUIRED)
-execute_process(COMMAND ${FLEX_EXEC}
- --header-file=${LEXER_GEN_HEADER} -o ${LEXER_GEN_SOURCE} ${LEXER_DEF})
 add_custom_command(
     OUTPUT ${LEXER_GEN_SOURCE} ${LEXER_GEN_HEADER}
     COMMAND ${FLEX_EXEC}
@@ -39,8 +37,8 @@ target_compile_options(flag_lib INTERFACE
 )
 
 # --- Library targets ---
-set(PUBLIC_HEADER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/include")
-set(PUBLIC_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(PUBLIC_HEADER_ROOT "${CMAKE_SOURCE_DIR}/include")
+set(PUBLIC_SOURCE_ROOT "${CMAKE_SOURCE_DIR}/src")
 
 # Generated lexer
 add_library(lexer_gen_lib STATIC "${LEXER_GEN_SOURCE}")
@@ -63,4 +61,10 @@ target_link_libraries(int3402e PRIVATE
 )
 
 # --- Testing ---
+include(${CMAKE_SOURCE_DIR}/Testing.cmake)
 include(GoogleTest)
+
+# add_unit_test(<target_name> <module_name>
+#     SOURCES <test source file>
+#     LIBS    <libraries to link against>
+# )

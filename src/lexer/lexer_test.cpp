@@ -1,4 +1,4 @@
-#include "frontend/lexer/lexer.h"
+#include "lexer/lexer.h"
 
 #include <gtest/gtest.h>
 

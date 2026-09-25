@@ -1,9 +1,12 @@
-/.cache/
-/.vscode/
-/bin/
-/build/
-/CMakeUserPresets.json
-/compile_commands.json
+.aider*
 
+.cache/
+.vscode/
+bin/
+build/
+out/
+
+CMakeUserPresets.json
+compile_commands.json
 lang_feature_demo.cpp
 token_stream.txt

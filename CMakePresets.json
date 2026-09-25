@@ -2,35 +2,28 @@
     "version": 3,
     "cmakeMinimumRequired": {
         "major": 3,
-        "minor": 28,
-        "patch": 0
+        "minor": 28
     },
     "configurePresets": [
         {
             "name": "base",
             "hidden": true,
             "generator": "Ninja",
-            "cacheVariables": {
-                "BUILD_TESTING": "ON"
-            }
+            "cacheVariables": { "BUILD_TESTING": "ON" }
         },
         {
             "name": "debug",
             "inherits": "base",
             "displayName": "Debug",
             "binaryDir": "${sourceDir}/build/debug",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
         },
         {
             "name": "release",
             "inherits": "base",
             "displayName": "Release",
             "binaryDir": "${sourceDir}/build/release",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
-            }
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
         }
     ],
     "buildPresets": [
@@ -47,22 +40,14 @@
         {
             "name": "debug",
             "configurePreset": "debug",
-            "output": {
-                "outputOnFailure": true
-            },
-            "execution": {
-                "noTestsAction": "error"
-            }
+            "output": { "outputOnFailure": true },
+            "execution": { "noTestsAction": "error" }
         },
         {
             "name": "release",
             "configurePreset": "release",
-            "output": {
-                "outputOnFailure": true
-            },
-            "execution": {
-                "noTestsAction": "error"
-            }
+            "output": { "outputOnFailure": true },
+            "execution": { "noTestsAction": "error" }
         }
     ]
 }

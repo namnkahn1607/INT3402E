@@ -5,7 +5,7 @@
 
 #include "common/diagnostic.h"
 #include "common/source_load.h"
-#include "frontend/lexer/lexer.h"
+#include "lexer/lexer.h"
 
 int main(int argc, char* argv[]) {
     if (argc > 2) {

@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "common/diagnostic.h"
-#include "frontend/lexer/token.h"
+#include "lexer/token.h"
 
 namespace lexer {
 

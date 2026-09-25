@@ -30,6 +30,8 @@
 DIGIT   [0-9]
 ALPHA   [a-zA-Z_]
 ALNUM   [a-zA-Z0-9_]
+FRAC       ({DIGIT}*\.{DIGIT}+|{DIGIT}+\.)
+EXPONENT   [eE][+-]?{DIGIT}+
 
 %%
 
@@ -62,6 +64,9 @@ ALNUM   [a-zA-Z0-9_]
 
 {ALPHA}{ALNUM}*             { TOK(identifier); }
 {DIGIT}+(\.{DIGIT}+)?[fF]?  { TOK(numeric_constant); }
+{FRAC}{EXPONENT}?[fFlL]?    { TOK(numeric_constant); }
+{DIGIT}+{EXPONENT}[fFlL]?   { TOK(numeric_constant); }
+{DIGIT}+                    { TOK(numeric_constant); }
 
 "("  { TOK(l_paren); }
 ")"  { TOK(r_paren); }

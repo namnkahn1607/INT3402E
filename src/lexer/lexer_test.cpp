@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "common/diagnostic.h"
 
 class LexerTest : public testing::Test {
@@ -36,6 +38,7 @@ TEST_F(LexerTest, DistinguishesOperators) {
     EXPECT_EQ(tokens[1].kind, lexer::TokenKind::equal);
     EXPECT_EQ(tokens[2].kind, lexer::TokenKind::plusplus);
     EXPECT_EQ(tokens[3].kind, lexer::TokenKind::plus);
+    EXPECT_FALSE(diag.HasErrors());
 }
 
 TEST_F(LexerTest, ReportsUnknownCharacters) {
@@ -50,6 +53,7 @@ TEST_F(LexerTest, TracksPositionsAcrossMultilineComments) {
     EXPECT_EQ(tokens[0].col, 1);
     EXPECT_EQ(tokens[1].line, 3);
     EXPECT_EQ(tokens[1].col, 6);
+    EXPECT_FALSE(diag.HasErrors());
 }
 
 TEST_F(LexerTest, ResetsStateForEachInput) {
@@ -58,4 +62,25 @@ TEST_F(LexerTest, ResetsStateForEachInput) {
     ASSERT_EQ(tokens.size(), 1U);
     EXPECT_EQ(tokens[0].line, 1);
     EXPECT_EQ(tokens[0].col, 1);
+    EXPECT_FALSE(diag.HasErrors());
+}
+
+TEST_F(LexerTest, LexesIntegerConstants) {
+    const auto tokens = scanner.Tokenize("42");
+    ASSERT_EQ(tokens.size(), 1U);
+    EXPECT_EQ(tokens[0].kind, lexer::TokenKind::numeric_constant);
+    EXPECT_EQ(tokens[0].lexeme, "42");
+    EXPECT_FALSE(diag.HasErrors());
+}
+
+TEST_F(LexerTest, LexesFloatingConstants) {
+    for (const std::string src :
+         {"3.14", ".5", "3.", "1e10", "1E-5", "3.14f"}) {
+        SCOPED_TRACE(src);
+        const auto tokens = scanner.Tokenize(src);
+        ASSERT_EQ(tokens.size(), 1U);
+        EXPECT_EQ(tokens[0].kind, lexer::TokenKind::numeric_constant);
+        EXPECT_EQ(tokens[0].lexeme, src);
+        EXPECT_FALSE(diag.HasErrors());
+    }
 }

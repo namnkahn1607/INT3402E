@@ -13,14 +13,10 @@ option(INT3402E_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 add_library(int3402e_options INTERFACE)
 target_compile_features(int3402e_options INTERFACE cxx_std_20)
 target_compile_options(int3402e_options INTERFACE
-    "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra;-Wpedantic;-Wshadow;-Wconversion>"
-    "$<$<CXX_COMPILER_ID:MSVC>:/W4>"
-)
+    "$<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wshadow;-Wconversion>")
 if(INT3402E_WARNINGS_AS_ERRORS)
     target_compile_options(int3402e_options INTERFACE
-        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Werror>"
-        "$<$<CXX_COMPILER_ID:MSVC>:/WX>"
-    )
+        "$<$<CXX_COMPILER_ID:GNU,Clang>:-Werror>")
 endif()
 
 add_subdirectory(src)

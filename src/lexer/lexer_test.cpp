@@ -24,6 +24,7 @@ TEST_F(LexerTest, ScansDeclarationAndSkipsComments) {
     EXPECT_EQ(tokens[1].lexeme, "answer");
     EXPECT_EQ(tokens[2].kind, lexer::TokenKind::equal);
     EXPECT_EQ(tokens[3].kind, lexer::TokenKind::numeric_constant);
+    EXPECT_EQ(tokens[3].lexeme, "42");
     EXPECT_EQ(tokens[4].kind, lexer::TokenKind::semi);
     EXPECT_FALSE(diag.HasErrors());
 }

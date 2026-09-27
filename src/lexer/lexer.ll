@@ -66,7 +66,6 @@ EXPONENT   [eE][+-]?{DIGIT}+
 {DIGIT}+(\.{DIGIT}+)?[fF]?  { TOK(numeric_constant); }
 {FRAC}{EXPONENT}?[fFlL]?    { TOK(numeric_constant); }
 {DIGIT}+{EXPONENT}[fFlL]?   { TOK(numeric_constant); }
-{DIGIT}+                    { TOK(numeric_constant); }
 
 "("  { TOK(l_paren); }
 ")"  { TOK(r_paren); }

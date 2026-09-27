@@ -14,7 +14,10 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
     if (src_text.size() >
         static_cast<std::size_t>(std::numeric_limits<int>::max())) {
         diag_.Report(
-            {0, 0, common::Severity::kError, "source exceeds scanner limit"}
+            {.line     = 0,
+             .col      = 0,
+             .severity = common::Severity::kError,
+             .message  = "source exceeds scanner limit"}
         );
         return {};
     }
@@ -22,7 +25,10 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
     yyscan_t scanner = nullptr;
     if (yylex_init_extra(LexerExtra{}, &scanner) != 0) {
         diag_.Report(
-            {0, 0, common::Severity::kError, "lexer initialization failed"}
+            {.line     = 0,
+             .col      = 0,
+             .severity = common::Severity::kError,
+             .message  = "lexer initialization failed"}
         );
         return {};
     }
@@ -39,18 +45,21 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
     int                kind;
     while ((kind = yylex(scanner)) != static_cast<int>(TokenKind::eof)) {
         Token tok{
-            static_cast<TokenKind>(kind),
-            std::string(
+            .kind   = static_cast<TokenKind>(kind),
+            .lexeme = std::string(
                 yyget_text(scanner),
                 static_cast<std::size_t>(yyget_leng(scanner))
             ),
-            yyget_lineno(scanner), yyget_extra(scanner).start_col
+            .line = yyget_lineno(scanner),
+            .col  = yyget_extra(scanner).start_col
         };
 
         if (tok.kind == TokenKind::unknown) {
             diag_.Report(
-                {tok.line, tok.col, common::Severity::kError,
-                 "unexpected token: '" + tok.lexeme + "'"}
+                {.line     = tok.line,
+                 .col      = tok.col,
+                 .severity = common::Severity::kError,
+                 .message  = "unexpected token: '" + tok.lexeme + "'"}
             );
             return {};
         }

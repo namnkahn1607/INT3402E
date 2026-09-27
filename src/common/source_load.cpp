@@ -15,7 +15,12 @@ std::optional<SourceBuf> LoadSourceFile(
 ) {
     std::ifstream file{path, std::ios::binary};
     if (!file) {
-        diag.Report({0, 0, Severity::kError, "cannot open source: " + path});
+        diag.Report(
+            {.line     = 0,
+             .col      = 0,
+             .severity = Severity::kError,
+             .message  = "cannot open source: " + path}
+        );
         return std::nullopt;
     }
 
@@ -23,7 +28,10 @@ std::optional<SourceBuf> LoadSourceFile(
     std::streamsize size = file.tellg();
     if (size < 0) {
         diag.Report(
-            {0, 0, Severity::kError, "cannot determine source size: " + path}
+            {.line     = 0,
+             .col      = 0,
+             .severity = Severity::kError,
+             .message  = "cannot determine source size: " + path}
         );
         return std::nullopt;
     }
@@ -31,11 +39,16 @@ std::optional<SourceBuf> LoadSourceFile(
 
     std::string content(static_cast<size_t>(size), '\0');
     if (!file.read(content.data(), size)) {
-        diag.Report({0, 0, Severity::kError, "failed reading source: " + path});
+        diag.Report(
+            {.line     = 0,
+             .col      = 0,
+             .severity = Severity::kError,
+             .message  = "failed reading source: " + path}
+        );
         return std::nullopt;
     }
 
-    return SourceBuf{path, std::move(content)};
+    return SourceBuf{.path = path, .text = std::move(content)};
 }
 
 }  // namespace common

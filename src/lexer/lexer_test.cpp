@@ -42,7 +42,10 @@ TEST_F(LexerTest, DistinguishesOperators) {
 }
 
 TEST_F(LexerTest, ReportsUnknownCharacters) {
-    EXPECT_TRUE(scanner.Tokenize("int @").empty());
+    const auto tokens = scanner.Tokenize("int @");
+    ASSERT_EQ(tokens.size(), 2U);
+    EXPECT_EQ(tokens[0].kind, lexer::TokenKind::kw_int);
+    EXPECT_EQ(tokens[1].kind, lexer::TokenKind::unknown);
     EXPECT_TRUE(diag.HasErrors());
 }
 

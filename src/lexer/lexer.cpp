@@ -61,7 +61,6 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
                  .severity = common::Severity::kError,
                  .message  = "unexpected token: '" + tok.lexeme + "'"}
             );
-            return {};
         }
 
         tokens.push_back(std::move(tok));

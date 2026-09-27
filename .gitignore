@@ -6,7 +6,8 @@ bin/
 build/
 out/
 
-CMakeUserPresets.json
+.env
 compile_commands.json
 lang_feature_demo.cpp
+prompt.txt
 token_stream.txt

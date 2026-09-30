@@ -14,9 +14,3 @@ add_module(lexer
     DEPS_PUBLIC INT3402E::common
     DEPS_PRIVATE lexer_generated)
 target_include_directories(lexer SYSTEM PRIVATE "${generated_dir}")
-
-if(BUILD_TESTING)
-    add_executable(lexer_test lexer_test.cpp)
-    target_link_libraries(lexer_test PRIVATE INT3402E::lexer int3402e_options GTest::gtest_main)
-    gtest_discover_tests(lexer_test PROPERTIES TIMEOUT 10)
-endif()

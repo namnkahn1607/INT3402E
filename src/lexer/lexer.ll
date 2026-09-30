@@ -1,5 +1,5 @@
 %top{
-#include "lexer_extra.h"
+#include "lexer/lexer_extra.h"
 #include "lexer/token.h" /* TokenKind enum comes here */
 }
 

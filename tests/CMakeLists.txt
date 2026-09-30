@@ -1,3 +1,5 @@
+add_subdirectory(lexer)
+
 # The CLI contract is currently unstable, so this smoke test is SUPER-redundant.
 
 add_test(NAME cli_smoke COMMAND "${CMAKE_COMMAND}"
@@ -8,4 +10,3 @@ set_tests_properties(cli_smoke PROPERTIES
     TIMEOUT 10
     DISABLED TRUE  # Temporarily disable this smoke test.
 )
-

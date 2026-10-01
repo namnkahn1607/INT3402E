@@ -1,10 +1,11 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace common {
 
-enum class Severity {
+enum class Severity : std::uint8_t {
     kWarning,
     kError,
 };

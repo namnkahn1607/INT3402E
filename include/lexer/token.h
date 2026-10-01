@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "common/source_location.h"
+
 namespace lexer {
 
 enum class TokenKind : int {
@@ -64,7 +66,8 @@ enum class TokenKind : int {
 struct Token {
     TokenKind   kind;
     std::string lexeme;
-    int         line, col;
+
+    common::SourceLocation loc;
 };
 
 }  // namespace lexer

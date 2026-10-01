@@ -1,12 +1,13 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include "common/source_location.h"
 
 namespace lexer {
 
-enum class TokenKind : int {
+enum class TokenKind : std::uint8_t {
     unknown,
     eof,
 

@@ -52,10 +52,10 @@ TEST_F(LexerTest, ReportsUnknownCharacters) {
 TEST_F(LexerTest, TracksPositionsAcrossMultilineComments) {
     const auto tokens = scanner.Tokenize("int\n/* a\nb */ ans");
     ASSERT_EQ(tokens.size(), 2U);
-    EXPECT_EQ(tokens[0].line, 1);
-    EXPECT_EQ(tokens[0].col, 1);
-    EXPECT_EQ(tokens[1].line, 3);
-    EXPECT_EQ(tokens[1].col, 6);
+    EXPECT_EQ(tokens[0].loc.line, 1);
+    EXPECT_EQ(tokens[0].loc.col, 1);
+    EXPECT_EQ(tokens[1].loc.line, 3);
+    EXPECT_EQ(tokens[1].loc.col, 6);
     EXPECT_FALSE(diag.HasErrors());
 }
 
@@ -63,8 +63,8 @@ TEST_F(LexerTest, ResetsStateForEachInput) {
     ASSERT_EQ(scanner.Tokenize("\nint").size(), 1U);
     const auto tokens = scanner.Tokenize("ans");
     ASSERT_EQ(tokens.size(), 1U);
-    EXPECT_EQ(tokens[0].line, 1);
-    EXPECT_EQ(tokens[0].col, 1);
+    EXPECT_EQ(tokens[0].loc.line, 1);
+    EXPECT_EQ(tokens[0].loc.col, 1);
     EXPECT_FALSE(diag.HasErrors());
 }
 

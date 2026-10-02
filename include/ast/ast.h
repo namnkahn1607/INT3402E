@@ -23,14 +23,7 @@ struct Program {
 };
 
 // --- Type system ---
-enum class Type : std::uint8_t {
-    Void,
-    Bool,
-    Int,
-    Long,
-    Float,
-    Double,
-};
+enum class Type : std::uint8_t { Void, Bool, Int, Long, Float, Double };
 
 // --- Declaration ---
 enum class DeclKind : std::uint8_t { Func, Var };
@@ -78,12 +71,7 @@ struct FuncDecl : Decl {
 };
 
 // --- Statement ---
-enum class StmtKind : std::uint8_t {
-    Compound,
-    Decl,
-    Expr,
-    Return,
-};
+enum class StmtKind : std::uint8_t { Compound, Decl, Expr, Return };
 
 struct Stmt {
     StmtKind               kind;
@@ -127,7 +115,7 @@ enum class ExprKind : std::uint8_t {
     Binary,
     Unary,
     Assign,
-    Call,
+    Call
 };
 
 struct Expr {
@@ -174,7 +162,7 @@ enum class BinaryOp : std::uint8_t {
     Gt,   // '>'
     Ge,   // '>='
     Eq,   // '=='
-    Ne,   // '!='
+    Ne    // '!='
 };
 
 struct BinaryExpr : Expr {
@@ -189,7 +177,7 @@ struct BinaryExpr : Expr {
 
 enum UnaryOp : std::uint8_t {
     Neg,  // '-'
-    Not,  // '!'
+    Not   // '!'
 };
 
 struct UnaryExpr : Expr {

@@ -18,6 +18,7 @@ enum class TokenKind : std::uint8_t {
     kw_const,     // const
     kw_continue,  // continue
     kw_default,   // default
+    kw_do,        // do
     kw_double,    // double
     kw_else,      // else
     kw_false,     // false
@@ -26,6 +27,7 @@ enum class TokenKind : std::uint8_t {
     kw_if,        // if
     kw_int,       // int
     kw_long,      // long
+    kw_print,     // print
     kw_return,    // return
     kw_short,     // short
     kw_switch,    // switch
@@ -33,12 +35,13 @@ enum class TokenKind : std::uint8_t {
     kw_void,      // void
     kw_while,     // while
 
-    // Starts with a letter or underscore, followed by letters, digits, or
-    // underscores.
+    // ASCII letters followed by optional trailing digits: [A-Za-z]+[0-9]*.
     identifier,
-    // Decimal integers and floating-point constants with an optional f/F
-    // suffix.
+    // Decimal integer spelling: [0-9]+. No range checking during lexing.
     numeric_constant,
+    // Whole broader candidates rejected and diagnosed by the lexer.
+    invalid_identifier,
+    invalid_numeric_constant,
 
     l_paren,  // (
     r_paren,  // )

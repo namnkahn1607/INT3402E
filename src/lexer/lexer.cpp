@@ -48,11 +48,19 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
                       .line = yyget_lineno(scanner),
                       .col  = yyget_extra(scanner).start_col}};
 
-        if (tok.kind == TokenKind::unknown) {
+        if (tok.kind == TokenKind::unknown ||
+            tok.kind == TokenKind::invalid_identifier ||
+            tok.kind == TokenKind::invalid_numeric_constant) {
+            const char* prefix = "unexpected token: '";
+            if (tok.kind == TokenKind::invalid_identifier) {
+                prefix = "invalid identifier: '";
+            } else if (tok.kind == TokenKind::invalid_numeric_constant) {
+                prefix = "invalid numeric constant: '";
+            }
             diag_.Report({.line     = tok.loc.line,
                           .col      = tok.loc.col,
                           .severity = common::Severity::kError,
-                          .message = "unexpected token: '" + tok.lexeme + "'"});
+                          .message  = prefix + tok.lexeme + "'"});
         }
 
         tokens.push_back(std::move(tok));

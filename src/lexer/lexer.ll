@@ -47,6 +47,7 @@ EXPONENT   [eE][+-]?{DIGIT}+
 "const"     { TOK(kw_const); }
 "continue"  { TOK(kw_continue); }
 "default"   { TOK(kw_default); }
+"do"        { TOK(kw_do); }
 "double"    { TOK(kw_double); }
 "else"      { TOK(kw_else); }
 "false"     { TOK(kw_false); }
@@ -55,6 +56,7 @@ EXPONENT   [eE][+-]?{DIGIT}+
 "if"        { TOK(kw_if); }
 "int"       { TOK(kw_int); }
 "long"      { TOK(kw_long); }
+"print"     { TOK(kw_print); }
 "return"    { TOK(kw_return); }
 "short"     { TOK(kw_short); }
 "switch"    { TOK(kw_switch); }
@@ -62,10 +64,13 @@ EXPONENT   [eE][+-]?{DIGIT}+
 "void"      { TOK(kw_void); }
 "while"     { TOK(kw_while); }
 
-{ALPHA}{ALNUM}*             { TOK(identifier); }
-{DIGIT}+(\.{DIGIT}+)?[fF]?  { TOK(numeric_constant); }
-{FRAC}{EXPONENT}?[fFlL]?    { TOK(numeric_constant); }
-{DIGIT}+{EXPONENT}[fFlL]?   { TOK(numeric_constant); }
+ /* Valid rules win ties; broader candidates win by length, retaining spelling. */
+[A-Za-z]+{DIGIT}*           { TOK(identifier); }
+{ALPHA}{ALNUM}*             { TOK(invalid_identifier); }
+{DIGIT}+                   { TOK(numeric_constant); }
+{DIGIT}+(\.{DIGIT}+)?[fF]?  { TOK(invalid_numeric_constant); }
+{FRAC}{EXPONENT}?[fFlL]?    { TOK(invalid_numeric_constant); }
+{DIGIT}+{EXPONENT}[fFlL]?   { TOK(invalid_numeric_constant); }
 
 "("  { TOK(l_paren); }
 ")"  { TOK(r_paren); }

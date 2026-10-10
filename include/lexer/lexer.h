@@ -18,8 +18,9 @@ public:
     Lexer(Lexer&&)                 = delete;
     Lexer& operator=(Lexer&&)      = delete;
 
-    // Returns no tokens for empty input or failure; inspect diagnostics for
-    // errors.
+    // Returns non-EOF tokens, retaining diagnosed unknown/invalid spellings and
+    // continuing scanning. Empty input or scanner failure returns no tokens;
+    // inspect shared diagnostics for compilation errors.
     std::vector<Token> Tokenize(const std::string& src_text);
 
 private:

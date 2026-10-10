@@ -1,4 +1,5 @@
 add_subdirectory(lexer)
+add_subdirectory(parser)
 
 # The CLI contract is currently unstable, so this smoke test is SUPER-redundant.
 

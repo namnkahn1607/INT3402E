@@ -90,6 +90,14 @@ private:
     void ReportSyntaxError(common::SourceLocation loc,
                            std::string_view       message);
 
+    // Statement-terminating ';' for declarations, assignments, print and
+    // do-while. Returns true when statement is structurally complete: the ';'
+    // was present, or it is missing at an evident statement boundary (next
+    // token on a later line, '}' or EOF). The latter is reported just after the
+    // previous token, and the caller keeps the statement. Returns false when
+    // the ';' is missing mid-line; the caller then fails and recovers.
+    bool ExpectTerminator(std::string_view message);
+
     // Explicit source blocks; file scope is parsed by ParseTranslationUnit().
     std::unique_ptr<ast::CompoundStmt> ParseBlock();
 
@@ -98,6 +106,11 @@ private:
     // delegate to specialized statement parsers or ParseBlock(). This stage
     // does not resolve names or validate types.
     ast::StmtPtr ParseStatement();
+
+    // ParseStatement plus panic-mode recovery on failure. The single owner of
+    // RecoveryStatement(); used by ParseTranslationUnit() and ParseBlock().
+    // Requires !AtEnd().
+    ast::StmtPtr ParseStatementOrRecover();
 
     // Reusable grammatical constructs.
     std::optional<ast::Type> ParseType();
@@ -151,6 +164,7 @@ private:
     std::size_t                   current_index_ = 0;
     common::SourceLocation        eof_location_{};
     bool                          has_syntax_errors_ = false;
+    common::SourceLocation        last_error_loc{};
 };
 
 }  // namespace parser

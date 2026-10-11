@@ -1,4 +1,5 @@
 // clang-format off
+#include "ast/statements.h"
 #include "parser/parser.h"
 // clang-format on
 
@@ -28,6 +29,7 @@ Parser::Parser(std::string_view source, std::span<const lexer::Token> tokens,
 ParseResult Parser::ParseTranslationUnit() {
     current_index_     = 0;
     has_syntax_errors_ = false;
+    last_error_loc     = {};
     auto unit          = std::make_unique<ast::TranslationUnit>();
     while (!AtEnd()) {
         if (PeekKind() == TokenKind::r_brace) {
@@ -38,17 +40,35 @@ ParseResult Parser::ParseTranslationUnit() {
             Consume();
             continue;
         }
-        const auto start     = current_index_;
-        auto       statement = ParseStatement();
-        if (statement) {
+        if (auto statement = ParseStatementOrRecover()) {
             unit->statements.push_back(std::move(statement));
-        } else if (tokens_[start].kind != TokenKind::kw_for) {
-            // Failed for parsers already own their synchronization.
-            RecoverStatement(start);
         }
     }
     return {.translation_unit  = std::move(unit),
             .has_syntax_errors = has_syntax_errors_};
+}
+
+bool Parser::ExpectTerminator(std::string_view message) {
+    if (Match(TokenKind::semi)) {
+        return true;
+    }
+    // The statement itself parsed completely; only its ';' is missing. If the
+    // next token is on a later line (or closes the block / file), the missing
+    // ';' belongs right after the previous token. Report it there and keep the
+    // statement, so the next statement is not swallowed by recovery.
+    const auto* next = PeekToken();
+    const bool  complete =
+        current_index_ > 0 &&
+        (next == nullptr || next->kind == TokenKind::r_brace ||
+         next->loc.line > tokens_[current_index_ - 1].loc.line);
+    auto loc = CurrentLocation();
+    if (complete) {
+        const auto& previous = tokens_[current_index_ - 1];
+        loc                  = previous.loc;
+        loc.col += static_cast<decltype(loc.col)>(previous.lexeme.size());
+    }
+    ReportSyntaxError(loc, message);
+    return complete;
 }
 
 bool Parser::AtEnd() const { return current_index_ >= tokens_.size(); }
@@ -110,6 +130,27 @@ void Parser::ReportSyntaxError(common::SourceLocation loc,
                          .col      = loc.col,
                          .severity = common::Severity::kError,
                          .message  = std::string{message}});
+}
+
+ast::StmtPtr Parser::ParseStatementOrRecover() {
+    // Only caller of RecoverStatement(): every ParseXxx below reports its
+    // error once and returns nullptr; this function alone skips tokens.
+    const auto start      = current_index_;
+    const auto start_kind = PeekKind();
+    auto       statement  = ParseStatement();
+    if (statement) {
+        return statement;
+    }
+    RecoverStatement(start);
+    // Recovery from a failed `if` skips through its then-block. A trailing
+    // `else` would then start a statement of its own and produce a bogus
+    // second error, so skip that clause as well.
+    if (start_kind == TokenKind::kw_if && PeekKind() == TokenKind::kw_else) {
+        const auto else_start = current_index_;
+        Consume();
+        RecoverStatement(else_start);
+    }
+    return nullptr;
 }
 
 void Parser::RecoverStatement(std::size_t statement_start) {

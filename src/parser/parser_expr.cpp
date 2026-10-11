@@ -38,12 +38,6 @@ std::optional<InfixOperator> GetInfixOperator(lexer::TokenKind kind) {
     }
 }
 
-bool IsCallerBoundary(lexer::TokenKind kind) {
-    return kind == lexer::TokenKind::semi ||
-           kind == lexer::TokenKind::r_paren ||
-           kind == lexer::TokenKind::r_brace || kind == lexer::TokenKind::eof;
-}
-
 }  // namespace
 
 namespace parser {
@@ -107,15 +101,11 @@ ast::ExprPtr Parser::ParseExpression(int min_binding_power) {
     while (!AtEnd()) {
         const auto kind  = PeekKind();
         const auto infix = GetInfixOperator(kind);
-        if (!infix) {
-            if (IsCallerBoundary(kind)) {
-                break;
-            }
-            ReportSyntaxError(CurrentLocation(),
-                              "unexpected token in expression");
-            return nullptr;
-        }
-        if (infix->left_binding_power < min_binding_power) {
+
+        // An expression ends at the first token that cannot continue it. The
+        // caller owns whatever follows (';', ')', or a stray token) and
+        // resports it with its own context.
+        if (!infix || infix->left_binding_power < min_binding_power) {
             break;
         }
 

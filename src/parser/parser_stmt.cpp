@@ -13,7 +13,7 @@ ast::StmtPtr Parser::ParseStatement() {
         case TokenKind::kw_bool: {
             auto declaration = ParseDeclaration();
             if (!declaration ||
-                !Expect(TokenKind::semi, "expected ';' after declaration")) {
+                !ExpectTerminator("expected ';' after declaration")) {
                 return nullptr;
             }
             return std::make_unique<ast::DeclStmt>(loc, std::move(declaration));
@@ -26,7 +26,7 @@ ast::StmtPtr Parser::ParseStatement() {
         case TokenKind::identifier: {
             auto assignment = ParseAssignment();
             if (!assignment ||
-                !Expect(TokenKind::semi, "expected ';' after assignment")) {
+                !ExpectTerminator("expected ';' after declaration")) {
                 return nullptr;
             }
             return assignment;
@@ -68,26 +68,13 @@ std::unique_ptr<ast::CompoundStmt> Parser::ParseBlock() {
     }
     auto block = std::make_unique<ast::CompoundStmt>(loc);
     while (!AtEnd() && PeekKind() != TokenKind::r_brace) {
-        const auto start     = current_index_;
-        auto       statement = ParseStatement();
-        if (statement) {
+        if (auto statement = ParseStatementOrRecover()) {
             block->body.push_back(std::move(statement));
-        } else {
-            // A for parser has already synchronized its own failed header/body.
-            if (tokens_[start].kind != TokenKind::kw_for) {
-                RecoverStatement(start);
-            }
-            if (AtEnd()) {
-                // A syntax failure already has a diagnostic. A lexical-only
-                // failure must not hide the missing block closer at EOF.
-                if (!has_syntax_errors_) {
-                    ReportSyntaxError(CurrentLocation(),
-                                      "expected '}' to close block");
-                }
-                return nullptr;
-            }
         }
     }
+
+    // Also reached at EOF after a failed statement: a missing '}' is always
+    // its own error and is never hidden by earlier diagnostics.
     if (!Expect(TokenKind::r_brace, "expected '}' to close block")) {
         return nullptr;
     }
@@ -102,7 +89,7 @@ ast::StmtPtr Parser::ParsePrintStatement() {
     auto value = ParseExpression();
     if (!value ||
         !Expect(TokenKind::r_paren, "expected ')' after print expression") ||
-        !Expect(TokenKind::semi, "expected ';' after print")) {
+        !ExpectTerminator("expected ';' after print")) {
         return nullptr;
     }
     return std::make_unique<ast::PrintStmt>(loc, std::move(value));
@@ -145,7 +132,7 @@ ast::StmtPtr Parser::ParseDoWhileStatement() {
     auto condition = ParseExpression();
     if (!condition ||
         !Expect(TokenKind::r_paren, "expected ')' after do condition") ||
-        !Expect(TokenKind::semi, "expected ';' after do/while")) {
+        !ExpectTerminator("expected ';' after do/while")) {
         return nullptr;
     }
     return std::make_unique<ast::DoWhileStmt>(loc, std::move(body),
@@ -153,46 +140,41 @@ ast::StmtPtr Parser::ParseDoWhileStatement() {
 }
 
 ast::StmtPtr Parser::ParseForStatement() {
-    const auto start = current_index_;
-    const auto fail  = [&]() -> ast::StmtPtr {
-        RecoverStatement(start);
-        return nullptr;
-    };
     const auto loc = Consume()->loc;
     if (!Expect(TokenKind::l_paren, "expected '(' after for")) {
-        return fail();
+        return nullptr;
     }
     ast::StmtPtr init;
     const auto   init_loc = CurrentLocation();
     if (PeekKind() == TokenKind::kw_int || PeekKind() == TokenKind::kw_bool) {
         auto declaration = ParseDeclaration();
         if (!declaration) {
-            return fail();
+            return nullptr;
         }
         init =
             std::make_unique<ast::DeclStmt>(init_loc, std::move(declaration));
     } else {
         auto assignment = ParseAssignment();
         if (!assignment) {
-            return fail();
+            return nullptr;
         }
         init = std::move(assignment);
     }
     if (!Expect(TokenKind::semi, "expected ';' after for initializer")) {
-        return fail();
+        return nullptr;
     }
     auto condition = ParseExpression();
     if (!condition ||
         !Expect(TokenKind::semi, "expected ';' after for condition")) {
-        return fail();
+        return nullptr;
     }
     auto step = ParseAssignment();
     if (!step || !Expect(TokenKind::r_paren, "expected ')' after for update")) {
-        return fail();
+        return nullptr;
     }
     auto body = ParseBlock();
     if (!body) {
-        return fail();
+        return nullptr;
     }
     return std::make_unique<ast::ForStmt>(loc, std::move(init),
                                           std::move(condition), std::move(step),

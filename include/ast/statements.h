@@ -17,6 +17,7 @@ using StmtPtr = std::unique_ptr<Stmt>;
 enum class StmtKind : std::uint8_t {
     Compound,
     Decl,
+    Assign,
     Expr,
     Return,
     If,
@@ -46,6 +47,16 @@ struct DeclStmt : Stmt {
         : Stmt{StmtKind::Decl, l}, decl{std::move(d)} {}
 };
 
+struct AssignStmt : Stmt {
+    ExprPtr target;  // Identifier reference; assignment is not an expression.
+    ExprPtr value;
+    AssignStmt(common::SourceLocation l, ExprPtr t, ExprPtr v)
+        : Stmt{StmtKind::Assign, l}
+        , target{std::move(t)}
+        , value{std::move(v)} {}
+};
+
+// Prototype only: general expression statements are not in the current grammar.
 struct ExprStmt : Stmt {
     ExprPtr expr;
     ExprStmt(common::SourceLocation l, ExprPtr e)
@@ -84,12 +95,13 @@ struct DoWhileStmt : Stmt {
 };
 
 struct ForStmt : Stmt {
-    StmtPtr                       init;  // `DeclStmt` or assignment `ExprStmt`
+    StmtPtr                       init;  // `DeclStmt` or `AssignStmt`
     ExprPtr                       condition;
-    ExprPtr                       step;  // `AssignExpr`
+    std::unique_ptr<AssignStmt>   step;
     std::unique_ptr<CompoundStmt> body;
 
-    ForStmt(common::SourceLocation l, StmtPtr i, ExprPtr c, ExprPtr s,
+    ForStmt(common::SourceLocation l, StmtPtr i, ExprPtr c,
+            std::unique_ptr<AssignStmt>   s,
             std::unique_ptr<CompoundStmt> loop_body)
         : Stmt{StmtKind::For, l}
         , init{std::move(i)}

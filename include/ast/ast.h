@@ -1,21 +1,20 @@
 #pragma once
 
-#include <vector>
 #include <span>
+#include <vector>
 
 #include "ast/declarations.h"
 #include "ast/expressions.h"
 #include "ast/statements.h"
-
 #include "common/diagnostic.h"
-
 #include "lexer/token.h"
 
 namespace ast {
 
-// Top-level translation unit: a list of declarations in file order.
+// Function-free source file: declarations and statements in source order.
+// Variable declarations use DeclStmt, just as they do within blocks.
 struct TranslationUnit {
-    std::vector<DeclPtr> decls;
+    std::vector<StmtPtr> statements;
 };
 
 }  // namespace ast

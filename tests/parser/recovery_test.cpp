@@ -74,15 +74,6 @@ void ExpectValidExpression(const ast::Expr* expression) {
             ExpectValidExpression(binary.rhs.get());
             break;
         }
-        case ast::ExprKind::Assign: {
-            const auto& assignment =
-                static_cast<const ast::AssignExpr&>(*expression);
-            ASSERT_NE(assignment.target, nullptr);
-            EXPECT_EQ(assignment.target->kind, ast::ExprKind::DeclRef);
-            ExpectValidExpression(assignment.target.get());
-            ExpectValidExpression(assignment.value.get());
-            break;
-        }
         default:
             ADD_FAILURE()
                 << "The parser retained an unsupported expression kind";
@@ -111,11 +102,13 @@ void ExpectValidStatement(const ast::Stmt* statement) {
             }
             break;
         }
-        case ast::StmtKind::Expr: {
-            const auto& wrapper = static_cast<const ast::ExprStmt&>(*statement);
-            ASSERT_NE(wrapper.expr, nullptr);
-            EXPECT_EQ(wrapper.expr->kind, ast::ExprKind::Assign);
-            ExpectValidExpression(wrapper.expr.get());
+        case ast::StmtKind::Assign: {
+            const auto& assignment =
+                static_cast<const ast::AssignStmt&>(*statement);
+            ASSERT_NE(assignment.target, nullptr);
+            EXPECT_EQ(assignment.target->kind, ast::ExprKind::DeclRef);
+            ExpectValidExpression(assignment.target.get());
+            ExpectValidExpression(assignment.value.get());
             break;
         }
         case ast::StmtKind::If: {
@@ -137,12 +130,12 @@ void ExpectValidStatement(const ast::Stmt* statement) {
             const auto& loop = static_cast<const ast::ForStmt&>(*statement);
             ASSERT_NE(loop.init, nullptr);
             EXPECT_TRUE(loop.init->kind == ast::StmtKind::Decl ||
-                        loop.init->kind == ast::StmtKind::Expr);
+                        loop.init->kind == ast::StmtKind::Assign);
             ExpectValidStatement(loop.init.get());
             ExpectValidExpression(loop.condition.get());
             ASSERT_NE(loop.step, nullptr);
-            EXPECT_EQ(loop.step->kind, ast::ExprKind::Assign);
-            ExpectValidExpression(loop.step.get());
+            EXPECT_EQ(loop.step->kind, ast::StmtKind::Assign);
+            ExpectValidStatement(loop.step.get());
             ExpectValidStatement(loop.body.get());
             break;
         }
@@ -159,28 +152,18 @@ void ExpectValidStatement(const ast::Stmt* statement) {
 
 void ExpectValidPartialTree(const parser::ParseResult& result) {
     ASSERT_NE(result.translation_unit, nullptr);
-    EXPECT_LE(result.translation_unit->decls.size(), 1U);
-    for (const auto& declaration : result.translation_unit->decls) {
-        ASSERT_NE(declaration, nullptr);
-        ASSERT_EQ(declaration->kind, ast::DeclKind::Func);
-        const auto& function = static_cast<const ast::FuncDecl&>(*declaration);
-        EXPECT_EQ(function.name, "main");
-        EXPECT_EQ(function.return_type, ast::Type::Int);
-        EXPECT_TRUE(function.params.empty());
-        ExpectValidStatement(function.body.get());
+    for (const auto& statement : result.translation_unit->statements) {
+        ExpectValidStatement(statement.get());
     }
 }
 
-const ast::CompoundStmt* MainBody(const parser::ParseResult& result) {
+const ast::CompoundStmt* OnlyBlock(const parser::ParseResult& result) {
     if (!result.translation_unit ||
-        result.translation_unit->decls.size() != 1U ||
-        !result.translation_unit->decls.front() ||
-        result.translation_unit->decls.front()->kind != ast::DeclKind::Func) {
+        result.translation_unit->statements.size() != 1U) {
         return nullptr;
     }
-    return static_cast<const ast::FuncDecl&>(
-               *result.translation_unit->decls.front())
-        .body.get();
+    return dynamic_cast<const ast::CompoundStmt*>(
+        result.translation_unit->statements.front().get());
 }
 
 const ast::PrintStmt* PrintAt(const ast::CompoundStmt& body,
@@ -201,7 +184,7 @@ void ExpectInteger(const ast::Expr* expression, std::string_view spelling) {
 
 TEST(ParserRecovery, IndependentMultilineErrorsRetainAllSafelyReachedPrints) {
     const auto parsed = ParseSource(
-        "int main() {\n"
+        "{\n"
         "int x = ;\n"
         "print(1);\n"
         "bool flag = 2 * ;\n"
@@ -218,7 +201,7 @@ TEST(ParserRecovery, IndependentMultilineErrorsRetainAllSafelyReachedPrints) {
     ExpectLocation(errors[2], 6, 11);
     ExpectValidPartialTree(parsed.result);
 
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 3U);
     const auto* first = PrintAt(*body, 0);
@@ -249,7 +232,7 @@ TEST(ParserRecovery, IndependentMultilineErrorsRetainAllSafelyReachedPrints) {
 TEST(ParserRecovery,
      MissingSemicolonSkipsToSafeBoundaryWithoutInsertingTokens) {
     const auto parsed = ParseSource(
-        "int main() {\n"
+        "{\n"
         "int before; int x\n"
         "print(1); print(2);\n"
         "}");
@@ -259,7 +242,7 @@ TEST(ParserRecovery,
     ASSERT_EQ(errors.size(), 1U) << parsed.diagnostics;
     ExpectLocation(errors[0], 3, 1);
     ExpectValidPartialTree(parsed.result);
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     ASSERT_GE(body->body.size(), 2U);
     ASSERT_NE(body->body[0], nullptr);
@@ -281,12 +264,12 @@ TEST(ParserRecovery,
 TEST(ParserRecovery,
      FailedInitializersAreOmittedAndEachOperandIsDiagnosedOnce) {
     const auto parsed =
-        ParseSource("int main() { int x = ; print(1); int y = ; print(2); }");
+        ParseSource("{ int x = ; print(1); int y = ; print(2); }");
     EXPECT_TRUE(parsed.result.has_syntax_errors);
     EXPECT_EQ(ErrorLocations(parsed.diagnostics).size(), 2U)
         << parsed.diagnostics;
     ExpectValidPartialTree(parsed.result);
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 2U);
     const auto* first  = PrintAt(*body, 0);
@@ -303,13 +286,12 @@ TEST(ParserRecovery,
          {"int x = 1 + ;", "x = 2 * ;", "print(1 + );", "int x = (1 + );",
           "print((1 + 2);", "int x = a > b > c;", "int x = a == b == c;"}) {
         SCOPED_TRACE(broken);
-        const auto parsed =
-            ParseSource("int main() { " + broken + " print(9); }");
+        const auto parsed = ParseSource("{ " + broken + " print(9); }");
         EXPECT_TRUE(parsed.result.has_syntax_errors);
         EXPECT_EQ(ErrorLocations(parsed.diagnostics).size(), 1U)
             << parsed.diagnostics;
         ExpectValidPartialTree(parsed.result);
-        const auto* body = MainBody(parsed.result);
+        const auto* body = OnlyBlock(parsed.result);
         ASSERT_NE(body, nullptr);
         ASSERT_EQ(body->body.size(), 1U);
         const auto* print = PrintAt(*body, 0);
@@ -319,13 +301,13 @@ TEST(ParserRecovery,
 }
 
 TEST(ParserRecovery, AnEnclosingBraceIsLeftToItsBlockOwner) {
-    const auto parsed = ParseSource("int main() { int x = }\n// tail\n");
+    const auto parsed = ParseSource("{ int x = }\n// tail\n");
     EXPECT_TRUE(parsed.result.has_syntax_errors);
     const auto errors = ErrorLocations(parsed.diagnostics);
     ASSERT_EQ(errors.size(), 1U) << parsed.diagnostics;
-    ExpectLocation(errors[0], 1, 22);
+    ExpectLocation(errors[0], 1, 11);
     ExpectValidPartialTree(parsed.result);
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     EXPECT_TRUE(body->body.empty());
 }
@@ -333,7 +315,7 @@ TEST(ParserRecovery, AnEnclosingBraceIsLeftToItsBlockOwner) {
 TEST(ParserRecovery,
      MultilineOperandAndTrailingCommentEofLocationsAreAccurate) {
     const auto malformed_expression = ParseSource(
-        "int main() {\n"
+        "{\n"
         "/* first\n"
         "second */\n"
         "int x = 1 +\n"
@@ -345,22 +327,21 @@ TEST(ParserRecovery,
     ASSERT_EQ(operand_errors.size(), 1U) << malformed_expression.diagnostics;
     ExpectLocation(operand_errors[0], 5, 3);
     ExpectValidPartialTree(malformed_expression.result);
-    const auto* body = MainBody(malformed_expression.result);
+    const auto* body = OnlyBlock(malformed_expression.result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 1U);
     ASSERT_NE(PrintAt(*body, 0), nullptr);
 
     for (const auto& source :
-         {std::string{"int main() {\n// tail\n"},
-          std::string{"int main() { int x =\n/* tail\n*/\n"},
-          std::string{"int main() { print((1 +\n// tail\n"}}) {
+         {std::string{"{\n// tail\n"}, std::string{"{ int x =\n/* tail\n*/\n"},
+          std::string{"{ print((1 +\n// tail\n"}}) {
         SCOPED_TRACE(source);
         const auto parsed = ParseSource(source);
         EXPECT_TRUE(parsed.result.has_syntax_errors);
         const auto errors = ErrorLocations(parsed.diagnostics);
         ASSERT_FALSE(errors.empty()) << parsed.diagnostics;
         EXPECT_LE(errors.size(), parsed.token_count + 1U);
-        if (source == "int main() {\n// tail\n") {
+        if (source == "{\n// tail\n") {
             EXPECT_EQ(errors.size(), 1U) << parsed.diagnostics;
         }
         const int expected_line =
@@ -380,18 +361,18 @@ TEST(ParserRecovery,
           "int i = 0; true; leaked =", "int i = 0; true; leaked = 1 +",
           "int i = 0; true; leaked = (1 + 2"}) {
         SCOPED_TRACE(header);
-        const auto parsed = ParseSource("int main() { for (" + header +
-                                        ") { print(1); } print(2); }");
+        const auto parsed =
+            ParseSource("{ for (" + header + ") { print(1); } print(2); }");
         EXPECT_TRUE(parsed.result.has_syntax_errors);
         const auto errors = ErrorLocations(parsed.diagnostics);
         EXPECT_FALSE(errors.empty());
         EXPECT_LE(errors.size(), parsed.token_count + 1U);
         ExpectValidPartialTree(parsed.result);
-        if (const auto* body = MainBody(parsed.result)) {
+        if (const auto* body = OnlyBlock(parsed.result)) {
             for (const auto& statement : body->body) {
                 ASSERT_NE(statement, nullptr);
                 EXPECT_NE(statement->kind, ast::StmtKind::For);
-                EXPECT_NE(statement->kind, ast::StmtKind::Expr)
+                EXPECT_NE(statement->kind, ast::StmtKind::Assign)
                     << "A failed for header must not leak its assignment "
                        "update";
                 EXPECT_NE(statement->kind, ast::StmtKind::Decl)
@@ -405,18 +386,18 @@ TEST(ParserRecovery,
 TEST(ParserRecovery,
      MalformedNestedControlsTerminateWithStructurallyValidTrees) {
     for (const std::string source :
-         {"int main() { if () { print(1); } print(2); }",
-          "int main() { if (true { int hidden; } print(2); }",
-          "int main() { if (true) { int x = ; } else { print(2); } }",
-          "int main() { if (true) { } else print(2); print(3); }",
-          "int main() { do { print(1); } while (); print(2); }",
-          "int main() { do { if (true) { print(1); } } print(2); }",
-          "int main() { for (int i = 0; true; i = 1) { if (true) { int x = } } "
+         {"{ if () { print(1); } print(2); }",
+          "{ if (true { int hidden; } print(2); }",
+          "{ if (true) { int x = ; } else { print(2); } }",
+          "{ if (true) { } else print(2); print(3); }",
+          "{ do { print(1); } while (); print(2); }",
+          "{ do { if (true) { print(1); } } print(2); }",
+          "{ for (int i = 0; true; i = 1) { if (true) { int x = } } "
           "}",
-          "int main() { { if (true { { int x; } } } print(3); }",
-          "int main() { if (true) { do { print(1); } while (1 + } }",
-          "int main() { for (int i = 0; (true; i = 1) { print(1); } }",
-          "int main() { int x = (1 + 2; print(9); }"}) {
+          "{ { if (true { { int x; } } } print(3); }",
+          "{ if (true) { do { print(1); } while (1 + } }",
+          "{ for (int i = 0; (true; i = 1) { print(1); } }",
+          "{ int x = (1 + 2; print(9); }"}) {
         SCOPED_TRACE(source);
         const auto parsed = ParseSource(source);
         EXPECT_TRUE(parsed.result.has_syntax_errors);
@@ -429,7 +410,7 @@ TEST(ParserRecovery,
 
 TEST(ParserRecovery, LexicalFailuresRetainValidStatementsWithoutSyntaxErrors) {
     const auto parsed = ParseSource(
-        "int main() {\n"
+        "{\n"
         "int a1b;\n"
         "print(1);\n"
         "int x = 3.14;\n"
@@ -448,7 +429,7 @@ TEST(ParserRecovery, LexicalFailuresRetainValidStatementsWithoutSyntaxErrors) {
               "6:1: error: invalid identifier: '_x'\n"
               "8:7: error: invalid identifier: 'a1b'\n");
     ExpectValidPartialTree(parsed.result);
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 4U);
     for (std::size_t index = 0; index < body->body.size(); ++index) {
@@ -461,7 +442,7 @@ TEST(ParserRecovery, LexicalFailuresRetainValidStatementsWithoutSyntaxErrors) {
 TEST(ParserRecovery,
      MixedLexicalAndSyntaxErrorsKeepDistinctStatusAndLocations) {
     const auto parsed = ParseSource(
-        "int main() {\n"
+        "{\n"
         "int x = 1e3;\n"
         "int y = ;\n"
         "print(2);\n"
@@ -485,7 +466,7 @@ TEST(ParserRecovery,
         "3:9: error: expected an expression\n"
         "10:11: error: chained comparison or equality is not supported\n");
     ExpectValidPartialTree(parsed.result);
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 3U);
     for (std::size_t index = 0; index < body->body.size(); ++index) {
@@ -506,13 +487,12 @@ TEST(ParserRecovery, InvalidSpellingsInControlsDoNotLeakMalformedChildren) {
           "if (true) { int _x; print(1); }",
           "do { print(3.14); print(1); } while (true);"}) {
         SCOPED_TRACE(broken);
-        const auto parsed =
-            ParseSource("int main() { " + broken + " print(9); }", true);
+        const auto parsed = ParseSource("{ " + broken + " print(9); }", true);
         EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
         EXPECT_EQ(ErrorLocations(parsed.diagnostics).size(), 1U);
         EXPECT_TRUE(parsed.has_errors);
         ExpectValidPartialTree(parsed.result);
-        const auto* body = MainBody(parsed.result);
+        const auto* body = OnlyBlock(parsed.result);
         ASSERT_NE(body, nullptr);
         ASSERT_FALSE(body->body.empty());
         const auto* last = PrintAt(*body, body->body.size() - 1U);
@@ -527,8 +507,7 @@ TEST(ParserRecovery, InvalidSpellingsAtExpectedDelimitersRemainLexerOwned) {
           "if (true) _x;", "do { } _x;", "for _x;",
           "for (int x = 0; true; x = 1 _x) { }"}) {
         SCOPED_TRACE(broken);
-        const auto parsed =
-            ParseSource("int main() { " + broken + " print(9); }", true);
+        const auto parsed = ParseSource("{ " + broken + " print(9); }", true);
         EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
         EXPECT_EQ(ErrorLocations(parsed.diagnostics).size(), 1U);
         ExpectValidPartialTree(parsed.result);
@@ -536,17 +515,17 @@ TEST(ParserRecovery, InvalidSpellingsAtExpectedDelimitersRemainLexerOwned) {
 }
 
 TEST(ParserRecovery, LexicalFailureDoesNotHideAnIndependentEofSyntaxError) {
-    const auto parsed = ParseSource("int main() { int _x;\n// tail\n", true);
+    const auto parsed = ParseSource("{ int _x;\n// tail\n", true);
     EXPECT_TRUE(parsed.result.has_syntax_errors);
     EXPECT_EQ(parsed.diagnostics,
-              "1:18: error: invalid identifier: '_x'\n"
+              "1:7: error: invalid identifier: '_x'\n"
               "3:1: error: expected '}' to close block\n");
     ExpectValidPartialTree(parsed.result);
 }
 
 TEST(ParserRecovery, InvalidTokenPrefixesTerminateWithBoundedDiagnostics) {
     const std::string source =
-        "int main() { for (int _x = 1e3; a1b; x = 3.14) { print(_x); } "
+        "{ for (int _x = 1e3; a1b; x = 3.14) { print(_x); } "
         "if (_x) { print(1); } print(9); }";
     common::DiagnosisEngine diagnostics;
     lexer::Lexer            scanner{diagnostics};
@@ -567,9 +546,112 @@ TEST(ParserRecovery, InvalidTokenPrefixesTerminateWithBoundedDiagnostics) {
     }
 }
 
+TEST(ParserRecovery, FileScopeRecoversAcrossLinesAndConsumesStrayBraces) {
+    const auto parsed =
+        ParseSource("int x = ;\nprint(1);\n}\nint y = 2;\nprint(y);\n}");
+    EXPECT_TRUE(parsed.result.has_syntax_errors);
+    const auto errors = ErrorLocations(parsed.diagnostics);
+    ASSERT_EQ(errors.size(), 3U) << parsed.diagnostics;
+    ExpectLocation(errors[0], 1, 9);
+    ExpectLocation(errors[1], 3, 1);
+    ExpectLocation(errors[2], 6, 1);
+    ExpectValidPartialTree(parsed.result);
+    const auto& statements = parsed.result.translation_unit->statements;
+    ASSERT_EQ(statements.size(), 3U);
+    EXPECT_EQ(statements[0]->kind, ast::StmtKind::Print);
+    EXPECT_EQ(statements[1]->kind, ast::StmtKind::Decl);
+    EXPECT_EQ(statements[2]->kind, ast::StmtKind::Print);
+}
+
+TEST(ParserRecovery, MalformedAssignmentsRetainLaterAssignmentStatements) {
+    const auto parsed = ParseSource("x = ;\ny = 2;\nprint(y = 3);\nz = 4;");
+    EXPECT_TRUE(parsed.result.has_syntax_errors);
+    const auto errors = ErrorLocations(parsed.diagnostics);
+    ASSERT_EQ(errors.size(), 2U) << parsed.diagnostics;
+    ExpectLocation(errors[0], 1, 5);
+    ExpectLocation(errors[1], 3, 9);
+    ExpectValidPartialTree(parsed.result);
+    const auto& statements = parsed.result.translation_unit->statements;
+    ASSERT_EQ(statements.size(), 2U);
+    for (const auto& statement : statements) {
+        ASSERT_EQ(statement->kind, ast::StmtKind::Assign);
+    }
+    const auto& first = static_cast<const ast::AssignStmt&>(*statements[0]);
+    const auto& last  = static_cast<const ast::AssignStmt&>(*statements[1]);
+    EXPECT_EQ(static_cast<const ast::DeclRefExpr&>(*first.target).name, "y");
+    EXPECT_EQ(static_cast<const ast::DeclRefExpr&>(*last.target).name, "z");
+    ExpectLocation(first.loc, 2, 1);
+    ExpectLocation(last.loc, 4, 1);
+}
+
+TEST(ParserRecovery, UnsupportedFunctionsDoNotLeakBodiesOrEraseLaterItems) {
+    for (const std::string function :
+         {"int main() { print(2); }", "int other();",
+          "bool other() { print(2); }", "int other(int x) { print(x); }"}) {
+        SCOPED_TRACE(function);
+        const auto parsed = ParseSource("print(1); " + function + " print(3);");
+        EXPECT_TRUE(parsed.result.has_syntax_errors);
+        EXPECT_EQ(ErrorLocations(parsed.diagnostics).size(), 1U);
+        ExpectValidPartialTree(parsed.result);
+        const auto& statements = parsed.result.translation_unit->statements;
+        ASSERT_EQ(statements.size(), 2U);
+        ASSERT_EQ(statements[0]->kind, ast::StmtKind::Print);
+        ASSERT_EQ(statements[1]->kind, ast::StmtKind::Print);
+        ExpectInteger(
+            static_cast<const ast::PrintStmt&>(*statements[0]).value.get(),
+            "1");
+        ExpectInteger(
+            static_cast<const ast::PrintStmt&>(*statements[1]).value.get(),
+            "3");
+    }
+}
+
+TEST(ParserRecovery, FileScopeLexicalFailuresKeepIndependentSyntaxStatus) {
+    const auto lexical =
+        ParseSource("int a1b; print(1); int x = 3.14; print(2);", true);
+    EXPECT_FALSE(lexical.result.has_syntax_errors);
+    EXPECT_EQ(ErrorLocations(lexical.diagnostics).size(), 2U);
+    ExpectValidPartialTree(lexical.result);
+    ASSERT_EQ(lexical.result.translation_unit->statements.size(), 2U);
+
+    const auto mixed = ParseSource("int x = 1e3;\nint y = ;\nprint(2);", true);
+    EXPECT_TRUE(mixed.result.has_syntax_errors);
+    const auto errors = ErrorLocations(mixed.diagnostics);
+    ASSERT_EQ(errors.size(), 2U);
+    ExpectLocation(errors[0], 1, 9);
+    ExpectLocation(errors[1], 2, 9);
+    ExpectValidPartialTree(mixed.result);
+    ASSERT_EQ(mixed.result.translation_unit->statements.size(), 1U);
+    EXPECT_EQ(mixed.result.translation_unit->statements[0]->kind,
+              ast::StmtKind::Print);
+}
+
+TEST(ParserRecovery, FileScopeTokenPrefixesTerminateWithValidPartialTrees) {
+    const std::string complete =
+        "int x = 1; print(x); if (true) { int y = 2; print(y); } "
+        "for (x = 1; true; x = x + 1) { print(x); } print(3);";
+    common::DiagnosisEngine diagnostics;
+    lexer::Lexer            scanner{diagnostics};
+    const auto              tokens = scanner.Tokenize(complete);
+    ASSERT_FALSE(diagnostics.HasErrors());
+    std::string prefix;
+    for (std::size_t count = 0; count <= tokens.size(); ++count) {
+        SCOPED_TRACE(prefix);
+        const auto parsed = ParseSource(prefix);
+        EXPECT_LE(ErrorLocations(parsed.diagnostics).size(),
+                  parsed.token_count + 1U);
+        ExpectValidPartialTree(parsed.result);
+        if (count == tokens.size()) {
+            EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
+        } else {
+            prefix += tokens[count].lexeme + ' ';
+        }
+    }
+}
+
 TEST(ParserRecovery, EveryTokenPrefixTerminatesWithBoundedDiagnostics) {
     const std::string complete =
-        "int main() { int x = 1 + 2 * 3; bool flag = true; "
+        "{ int x = 1 + 2 * 3; bool flag = true; "
         "if (x > 1 == flag) { print((x + 1) * 2); } else { x = x + 1; } "
         "do { { print(x); } } while (x >= 1); "
         "for (int i = 0; i > 3; i = i + 1) { print(i); } }";
@@ -582,9 +664,9 @@ TEST(ParserRecovery, EveryTokenPrefixTerminatesWithBoundedDiagnostics) {
     for (std::size_t count = 0; count < complete_tokens.size(); ++count) {
         SCOPED_TRACE(prefix);
         const auto parsed = ParseSource(prefix);
-        EXPECT_TRUE(parsed.result.has_syntax_errors);
+        EXPECT_EQ(parsed.result.has_syntax_errors, count != 0);
         const auto errors = ErrorLocations(parsed.diagnostics);
-        EXPECT_FALSE(errors.empty());
+        EXPECT_EQ(errors.empty(), count == 0);
         EXPECT_LE(errors.size(), parsed.token_count + 1U);
         for (const auto location : errors) {
             EXPECT_GE(location.line, 1);

@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -42,7 +43,7 @@ struct ParserTestAccess {
     static std::unique_ptr<ast::VarDecl> Declaration(Parser& parser) {
         return parser.ParseDeclaration();
     }
-    static std::unique_ptr<ast::AssignExpr> Assignment(Parser& parser) {
+    static std::unique_ptr<ast::AssignStmt> Assignment(Parser& parser) {
         return parser.ParseAssignment();
     }
 };
@@ -50,6 +51,9 @@ struct ParserTestAccess {
 }  // namespace parser
 
 namespace {
+
+static_assert(std::is_base_of_v<ast::Stmt, ast::AssignStmt>);
+static_assert(!std::is_base_of_v<ast::Expr, ast::AssignStmt>);
 
 struct Parsed {
     parser::ParseResult result;
@@ -69,17 +73,16 @@ Parsed Parse(const std::string& source) {
 }
 
 Parsed ParseBody(std::string_view body) {
-    return Parse("int main() { " + std::string{body} + " }");
+    return Parse("{ " + std::string{body} + " }");
 }
 
-const ast::CompoundStmt* MainBody(const parser::ParseResult& result) {
+const ast::CompoundStmt* OnlyBlock(const parser::ParseResult& result) {
     if (!result.translation_unit ||
-        result.translation_unit->decls.size() != 1) {
+        result.translation_unit->statements.size() != 1) {
         return nullptr;
     }
-    const auto* main = dynamic_cast<const ast::FuncDecl*>(
-        result.translation_unit->decls[0].get());
-    return main ? main->body.get() : nullptr;
+    return dynamic_cast<const ast::CompoundStmt*>(
+        result.translation_unit->statements[0].get());
 }
 
 const ast::VarDecl* Variable(const ast::Stmt* statement) {
@@ -108,16 +111,6 @@ void ExpectExpression(const ast::Expr* expression) {
             ASSERT_NE(binary, nullptr);
             ExpectExpression(binary->lhs.get());
             ExpectExpression(binary->rhs.get());
-            break;
-        }
-        case ast::ExprKind::Assign: {
-            const auto* assignment =
-                dynamic_cast<const ast::AssignExpr*>(expression);
-            ASSERT_NE(assignment, nullptr);
-            ASSERT_NE(assignment->target, nullptr);
-            EXPECT_EQ(assignment->target->kind, ast::ExprKind::DeclRef);
-            ExpectExpression(assignment->target.get());
-            ExpectExpression(assignment->value.get());
             break;
         }
         default:
@@ -149,12 +142,14 @@ void ExpectStatement(const ast::Stmt* statement) {
             }
             break;
         }
-        case ast::StmtKind::Expr: {
-            const auto* wrapper = dynamic_cast<const ast::ExprStmt*>(statement);
-            ASSERT_NE(wrapper, nullptr);
-            ASSERT_NE(wrapper->expr, nullptr);
-            EXPECT_EQ(wrapper->expr->kind, ast::ExprKind::Assign);
-            ExpectExpression(wrapper->expr.get());
+        case ast::StmtKind::Assign: {
+            const auto* assignment =
+                dynamic_cast<const ast::AssignStmt*>(statement);
+            ASSERT_NE(assignment, nullptr);
+            ASSERT_NE(assignment->target, nullptr);
+            EXPECT_EQ(assignment->target->kind, ast::ExprKind::DeclRef);
+            ExpectExpression(assignment->target.get());
+            ExpectExpression(assignment->value.get());
             break;
         }
         case ast::StmtKind::Print: {
@@ -185,12 +180,12 @@ void ExpectStatement(const ast::Stmt* statement) {
             ASSERT_NE(loop, nullptr);
             ASSERT_NE(loop->init, nullptr);
             EXPECT_TRUE(loop->init->kind == ast::StmtKind::Decl ||
-                        loop->init->kind == ast::StmtKind::Expr);
+                        loop->init->kind == ast::StmtKind::Assign);
             ExpectStatement(loop->init.get());
             ExpectExpression(loop->condition.get());
             ASSERT_NE(loop->step, nullptr);
-            EXPECT_EQ(loop->step->kind, ast::ExprKind::Assign);
-            ExpectExpression(loop->step.get());
+            EXPECT_EQ(loop->step->kind, ast::StmtKind::Assign);
+            ExpectStatement(loop->step.get());
             ExpectStatement(loop->body.get());
             break;
         }
@@ -199,26 +194,86 @@ void ExpectStatement(const ast::Stmt* statement) {
     }
 }
 
-TEST(ParserProgramTest, EmptyMainHasExactlyOneOwningFunction) {
-    const auto parsed = Parse("int main() { }");
+TEST(ParserProgramTest, EmptyBlockIsAnExplicitStatement) {
+    const auto parsed = Parse("{ }");
     EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
     EXPECT_TRUE(parsed.diagnostics.empty());
+    const auto* block = OnlyBlock(parsed.result);
+    ASSERT_NE(block, nullptr);
+    EXPECT_TRUE(block->body.empty());
+    ExpectLocation(block->loc, 1, 1);
+}
+
+TEST(ParserProgramTest, BareSourceDoesNotRequireAnEntryFunction) {
+    const auto parsed = Parse("int a = 1; print(a); a = a + 1;");
+    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
+    EXPECT_FALSE(parsed.has_errors);
     ASSERT_NE(parsed.result.translation_unit, nullptr);
-    ASSERT_EQ(parsed.result.translation_unit->decls.size(), 1U);
-    const auto* main = dynamic_cast<const ast::FuncDecl*>(
-        parsed.result.translation_unit->decls[0].get());
-    ASSERT_NE(main, nullptr);
-    EXPECT_EQ(main->name, "main");
-    EXPECT_EQ(main->return_type, ast::Type::Int);
-    EXPECT_TRUE(main->params.empty());
-    ASSERT_NE(main->body, nullptr);
-    EXPECT_TRUE(main->body->body.empty());
-    ExpectLocation(main->loc, 1, 1);
-    ExpectLocation(main->body->loc, 1, 12);
+    const auto& statements = parsed.result.translation_unit->statements;
+    ASSERT_EQ(statements.size(), 3U);
+    ASSERT_NE(Variable(statements[0].get()), nullptr);
+    EXPECT_EQ(Variable(statements[0].get())->name, "a");
+    EXPECT_EQ(statements[1]->kind, ast::StmtKind::Print);
+    EXPECT_EQ(statements[2]->kind, ast::StmtKind::Assign);
+    ExpectLocation(statements[0]->loc, 1, 1);
+    ExpectLocation(statements[1]->loc, 1, 12);
+    ExpectLocation(statements[2]->loc, 1, 22);
+    for (const auto& statement : statements) {
+        ExpectStatement(statement.get());
+    }
+}
+
+TEST(ParserProgramTest, EmptyAndTriviaOnlySourcesAreValid) {
+    for (const std::string source : {"", " \n// tail\n/* closed */"}) {
+        const auto parsed = Parse(source);
+        EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
+        EXPECT_FALSE(parsed.has_errors);
+        ASSERT_NE(parsed.result.translation_unit, nullptr);
+        EXPECT_TRUE(parsed.result.translation_unit->statements.empty());
+    }
+}
+
+TEST(ParserProgramTest, MainIsAnOrdinaryTopLevelVariable) {
+    const auto parsed = Parse("int main = 1; main = main + 1; print(main);");
+    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
+    ASSERT_NE(parsed.result.translation_unit, nullptr);
+    const auto& statements = parsed.result.translation_unit->statements;
+    ASSERT_EQ(statements.size(), 3U);
+    ASSERT_NE(Variable(statements[0].get()), nullptr);
+    EXPECT_EQ(Variable(statements[0].get())->name, "main");
+    for (const auto& statement : statements) {
+        ExpectStatement(statement.get());
+    }
+}
+
+TEST(ParserProgramTest, TopLevelControlsAndDeclarationsRetainSourceOrder) {
+    const auto parsed = Parse(R"(int x = 1 + 2 * 3;
+bool flag = x >= 3 == true;
+if (flag) { print((x + 1) * 2); } else { x = x + 1; }
+do { x = x + 1; } while (x > 10);
+for (int i = 0; 3 > i; i = i + 1) { print(i); }
+for (x = 1; flag; x = x * 2) { print(x); }
+{ int local = 1; print(local); }
+print(x);
+)");
+    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.result.translation_unit, nullptr);
+    const auto& statements = parsed.result.translation_unit->statements;
+    const std::vector<ast::StmtKind> kinds{
+        ast::StmtKind::Decl,     ast::StmtKind::Decl, ast::StmtKind::If,
+        ast::StmtKind::DoWhile,  ast::StmtKind::For,  ast::StmtKind::For,
+        ast::StmtKind::Compound, ast::StmtKind::Print};
+    ASSERT_EQ(statements.size(), kinds.size());
+    for (std::size_t index = 0; index < statements.size(); ++index) {
+        EXPECT_EQ(statements[index]->kind, kinds[index]);
+        ExpectLocation(statements[index]->loc, static_cast<int>(index) + 1, 1);
+        ExpectStatement(statements[index].get());
+    }
 }
 
 TEST(ParserProgramTest, RepresentativeCompleteProgramUsesEveryControlForm) {
-    const auto parsed = Parse(R"(int main() {
+    const auto parsed = Parse(R"({
     // Single-line comment is trivia.
     int x = 1 + 2 * 3;
     bool flag = x >= 3 == true;
@@ -232,7 +287,7 @@ TEST(ParserProgramTest, RepresentativeCompleteProgramUsesEveryControlForm) {
 })");
     EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
     EXPECT_TRUE(parsed.diagnostics.empty());
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 7U);
     const std::vector<ast::StmtKind> expected{
@@ -248,7 +303,7 @@ TEST(ParserProgramTest, RepresentativeCompleteProgramUsesEveryControlForm) {
     ASSERT_NE(selection->else_branch, nullptr);
     ASSERT_EQ(selection->then_branch->body.size(), 1U);
     EXPECT_EQ(selection->then_branch->body[0]->kind, ast::StmtKind::Print);
-    EXPECT_EQ(selection->else_branch->body[0]->kind, ast::StmtKind::Expr);
+    EXPECT_EQ(selection->else_branch->body[0]->kind, ast::StmtKind::Assign);
     const auto* declaration_for =
         dynamic_cast<const ast::ForStmt*>(body->body[4].get());
     const auto* assignment_for =
@@ -256,7 +311,7 @@ TEST(ParserProgramTest, RepresentativeCompleteProgramUsesEveryControlForm) {
     ASSERT_NE(declaration_for, nullptr);
     ASSERT_NE(assignment_for, nullptr);
     EXPECT_EQ(declaration_for->init->kind, ast::StmtKind::Decl);
-    EXPECT_EQ(assignment_for->init->kind, ast::StmtKind::Expr);
+    EXPECT_EQ(assignment_for->init->kind, ast::StmtKind::Assign);
     const auto* nested =
         dynamic_cast<const ast::CompoundStmt*>(body->body[6].get());
     ASSERT_NE(nested, nullptr);
@@ -271,7 +326,7 @@ TEST(ParserProgramTest, DeclarationsAssignmentsAndLiteralDataAreDistinct) {
     const auto parsed =
         ParseBody("int x; bool flag = false; x = 00042; print(flag);");
     EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 4U);
     const auto* uninitialized = Variable(body->body[0].get());
@@ -286,11 +341,8 @@ TEST(ParserProgramTest, DeclarationsAssignmentsAndLiteralDataAreDistinct) {
         dynamic_cast<const ast::BoolLiteralExpr*>(initialized->init.get());
     ASSERT_NE(boolean, nullptr);
     EXPECT_FALSE(boolean->value);
-    const auto* wrapper =
-        dynamic_cast<const ast::ExprStmt*>(body->body[2].get());
-    ASSERT_NE(wrapper, nullptr);
     const auto* assignment =
-        dynamic_cast<const ast::AssignExpr*>(wrapper->expr.get());
+        dynamic_cast<const ast::AssignStmt*>(body->body[2].get());
     ASSERT_NE(assignment, nullptr);
     const auto* target =
         dynamic_cast<const ast::DeclRefExpr*>(assignment->target.get());
@@ -309,18 +361,31 @@ TEST(ParserProgramTest, SyntaxParsingDoesNotResolveNamesOrValidateTypes) {
         "bool flag = 99999999999999999999999999999999999999;");
     EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
     EXPECT_TRUE(parsed.diagnostics.empty());
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     EXPECT_EQ(body->body.size(), 6U);
     ExpectStatement(body);
 }
 
+TEST(ParserGrammarTest, AssignmentsRemainStatementsNotExpressions) {
+    for (const std::string source :
+         {"x = y = 1;", "int y = (x = 1);", "print(x = 1);", "if (x = 1) { }",
+          "for (x = 0; x = 1; x = 2) { }"}) {
+        SCOPED_TRACE(source);
+        const auto parsed = Parse(source);
+        EXPECT_TRUE(parsed.result.has_syntax_errors);
+        EXPECT_TRUE(parsed.has_errors);
+        ASSERT_NE(parsed.result.translation_unit, nullptr);
+        EXPECT_TRUE(parsed.result.translation_unit->statements.empty());
+    }
+}
+
 TEST(ParserProgramTest, LocationsUseLeadingTokensAndOperatorsAcrossTrivia) {
     const auto parsed = Parse(
-        "int main() {\n/* a\nb*/ int x=00042;\n  x = x + 1;\n  { print(false); "
+        "{\n/* a\nb*/ int x=00042;\n  x = x + 1;\n  { print(false); "
         "}\n}");
     EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 3U);
     const auto* variable = Variable(body->body[0].get());
@@ -328,13 +393,9 @@ TEST(ParserProgramTest, LocationsUseLeadingTokensAndOperatorsAcrossTrivia) {
     ExpectLocation(variable->loc, 3, 5);
     ExpectLocation(body->body[0]->loc, 3, 5);
     ExpectLocation(variable->init->loc, 3, 11);
-    const auto* wrapper =
-        dynamic_cast<const ast::ExprStmt*>(body->body[1].get());
-    ASSERT_NE(wrapper, nullptr);
     const auto* assignment =
-        dynamic_cast<const ast::AssignExpr*>(wrapper->expr.get());
+        dynamic_cast<const ast::AssignStmt*>(body->body[1].get());
     ASSERT_NE(assignment, nullptr);
-    ExpectLocation(wrapper->loc, 4, 3);
     ExpectLocation(assignment->loc, 4, 3);
     ExpectLocation(assignment->target->loc, 4, 3);
     ExpectLocation(assignment->value->loc, 4, 9);
@@ -353,13 +414,13 @@ TEST(ParserProgramTest, LocationsUseLeadingTokensAndOperatorsAcrossTrivia) {
 TEST(ParserProgramTest,
      ControlStatementsUseKeywordLocationsAndAllowBoolForDeclaration) {
     const auto parsed = Parse(
-        "int main() {\n"
+        "{\n"
         "  if (true) { } else { }\n"
         "  do { } while (false);\n"
         "  for (bool flag; true; flag = false) { }\n"
         "}");
     EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 3U);
     ExpectLocation(body->body[0]->loc, 2, 3);
@@ -377,9 +438,9 @@ TEST(ParserProgramTest,
 
 TEST(ParserExpressionTest, PrecedenceGroupingAndBinaryLocations) {
     const auto parsed =
-        Parse("int main() {\nint x = 1 +\n  2 * 3;\nprint((1 + 2) * 3);\n}");
+        Parse("{\nint x = 1 +\n  2 * 3;\nprint((1 + 2) * 3);\n}");
     EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     const auto* variable = Variable(body->body[0].get());
     ASSERT_NE(variable, nullptr);
@@ -416,7 +477,7 @@ TEST(ParserExpressionTest, RepeatedArithmeticIsLeftAssociated) {
         SCOPED_TRACE(expression);
         const auto parsed = ParseBody("print(" + expression + ");");
         EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-        const auto* body = MainBody(parsed.result);
+        const auto* body = OnlyBlock(parsed.result);
         ASSERT_NE(body, nullptr);
         const auto* print =
             dynamic_cast<const ast::PrintStmt*>(body->body[0].get());
@@ -439,7 +500,7 @@ TEST(ParserExpressionTest, RepeatedArithmeticIsLeftAssociated) {
 TEST(ParserExpressionTest, ComparisonBindsMoreTightlyThanEquality) {
     const auto parsed = ParseBody("print(a + b * c >= d == e > f + g);");
     EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = MainBody(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
     const auto* print =
         dynamic_cast<const ast::PrintStmt*>(body->body[0].get());
@@ -474,7 +535,7 @@ TEST(ParserExpressionTest, ExplicitGroupingHasIndependentChainRestrictions) {
         SCOPED_TRACE(expression);
         const auto parsed = ParseBody("print(" + expression + ");");
         EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-        const auto* body = MainBody(parsed.result);
+        const auto* body = OnlyBlock(parsed.result);
         ASSERT_NE(body, nullptr);
         ASSERT_EQ(body->body.size(), 1U);
         ExpectStatement(body);
@@ -490,7 +551,7 @@ TEST(ParserExpressionTest,
         const auto parsed = ParseBody("print(" + expression + ");");
         EXPECT_TRUE(parsed.result.has_syntax_errors);
         EXPECT_FALSE(parsed.diagnostics.empty());
-        const auto* body = MainBody(parsed.result);
+        const auto* body = OnlyBlock(parsed.result);
         ASSERT_NE(body, nullptr);
         EXPECT_TRUE(body->body.empty());
     }
@@ -503,7 +564,7 @@ TEST(ParserGrammarTest, RestrictedNamesAllowDigitSuffixesAndKeywordPrefixes) {
         const auto parsed = ParseBody("int " + name + " = 1; " + name + " = " +
                                       name + " + 1; print(" + name + ");");
         EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-        const auto* body = MainBody(parsed.result);
+        const auto* body = OnlyBlock(parsed.result);
         ASSERT_NE(body, nullptr);
         EXPECT_EQ(body->body.size(), 3U);
         ExpectStatement(body);
@@ -540,7 +601,7 @@ TEST(ParserGrammarTest, LexerRecognitionDoesNotBroadenSupportedExpressions) {
         EXPECT_EQ(parsed.result.has_syntax_errors, !invalid_spelling);
         EXPECT_TRUE(parsed.has_errors);
         EXPECT_FALSE(parsed.diagnostics.empty());
-        const auto* body = MainBody(parsed.result);
+        const auto* body = OnlyBlock(parsed.result);
         ASSERT_NE(body, nullptr);
         EXPECT_TRUE(body->body.empty());
     }
@@ -577,28 +638,27 @@ TEST(ParserGrammarTest, UnsupportedStatementsTypesAndForFieldsAreRejected) {
     }
 }
 
-TEST(ParserGrammarTest, ExactlyOneParameterlessIntMainIsRequired) {
-    for (const std::string source :
-         {"", "int other() { }", "bool main() { }", "void main() { }",
-          "int main(int x) { }", "int main()", "int main();",
-          "int main() { } int main() { }", "int main() { } print(1);",
-          "int main() { } }"}) {
-        SCOPED_TRACE(source);
-        const auto parsed = Parse(source);
-        EXPECT_TRUE(parsed.result.has_syntax_errors);
-        EXPECT_FALSE(parsed.diagnostics.empty());
-        ASSERT_NE(parsed.result.translation_unit, nullptr);
-        EXPECT_LE(parsed.result.translation_unit->decls.size(), 1U);
+TEST(ParserGrammarTest, FunctionDeclarationsAndDefinitionsAreDeferred) {
+    for (const std::string function :
+         {"int main() { }", "int other() { }", "bool other() { }",
+          "void main() { }", "int main(int x) { }", "int main()", "int main();",
+          "int other();"}) {
+        for (const auto& source : {function, "{ " + function + " }"}) {
+            SCOPED_TRACE(source);
+            const auto parsed = Parse(source);
+            EXPECT_TRUE(parsed.result.has_syntax_errors);
+            EXPECT_TRUE(parsed.has_errors);
+            ASSERT_NE(parsed.result.translation_unit, nullptr);
+            for (const auto& statement :
+                 parsed.result.translation_unit->statements) {
+                ExpectStatement(statement.get());
+            }
+        }
     }
-    const auto extra = Parse("int main() { print(1); } int other() { }");
-    EXPECT_TRUE(extra.result.has_syntax_errors);
-    const auto* retained_main = MainBody(extra.result);
-    ASSERT_NE(retained_main, nullptr);
-    EXPECT_EQ(retained_main->body.size(), 1U);
 }
 
 TEST(ParserCursorTest, VirtualEofIsObservableButNeverConsumable) {
-    const std::string       source = "int main() { }\n// tail\n";
+    const std::string       source = "{ }\n// tail\n";
     common::DiagnosisEngine diagnostics;
     lexer::Lexer            lexer{diagnostics};
     const auto              tokens = lexer.Tokenize(source);
@@ -641,13 +701,15 @@ TEST(ParserCursorTest, EmptySequenceStartsAtOneBasedEof) {
     testing::internal::CaptureStderr();
     const auto result = parser.ParseTranslationUnit();
     const auto output = testing::internal::GetCapturedStderr();
-    EXPECT_TRUE(result.has_syntax_errors);
-    EXPECT_NE(output.find("1:1: error:"), std::string::npos);
+    EXPECT_FALSE(result.has_syntax_errors);
+    EXPECT_TRUE(output.empty());
+    ASSERT_NE(result.translation_unit, nullptr);
+    EXPECT_TRUE(result.translation_unit->statements.empty());
     ASSERT_NE(result.translation_unit, nullptr);
 }
 
 TEST(ParserLifecycleTest, RepeatedCallsResetCursorAndKeepSharedErrorState) {
-    const std::string       source = "int main() { print(1); }";
+    const std::string       source = "{ print(1); }";
     common::DiagnosisEngine diagnostics;
     lexer::Lexer            lexer{diagnostics};
     const auto              tokens = lexer.Tokenize(source);
@@ -663,8 +725,8 @@ TEST(ParserLifecycleTest, RepeatedCallsResetCursorAndKeepSharedErrorState) {
     EXPECT_FALSE(second.has_syntax_errors);
     EXPECT_TRUE(diagnostics.HasErrors());
     EXPECT_NE(first.translation_unit.get(), second.translation_unit.get());
-    const auto* first_body  = MainBody(first);
-    const auto* second_body = MainBody(second);
+    const auto* first_body  = OnlyBlock(first);
+    const auto* second_body = OnlyBlock(second);
     ASSERT_NE(first_body, nullptr);
     ASSERT_NE(second_body, nullptr);
     ASSERT_EQ(first_body->body.size(), 1U);
@@ -678,11 +740,11 @@ TEST(ParserLifecycleTest, RepeatedCallsResetCursorAndKeepSharedErrorState) {
         EXPECT_EQ(tokens[index].loc.line, original_tokens[index].loc.line);
         EXPECT_EQ(tokens[index].loc.col, original_tokens[index].loc.col);
     }
-    EXPECT_EQ(source, "int main() { print(1); }");
+    EXPECT_EQ(source, "{ print(1); }");
 }
 
 TEST(ParserLifecycleTest, PriorWarningDoesNotBecomeLocalSyntaxError) {
-    const std::string       source = "int main() { }";
+    const std::string       source = "{ }";
     common::DiagnosisEngine diagnostics;
     lexer::Lexer            lexer{diagnostics};
     const auto              tokens = lexer.Tokenize(source);
@@ -698,13 +760,13 @@ TEST(ParserLifecycleTest, PriorWarningDoesNotBecomeLocalSyntaxError) {
 
 TEST(ParserLifecycleTest,
      RepeatedLexicalFailuresDoNotRediagnoseOrSetSyntaxStatus) {
-    const std::string       source = "int main() { int a1b; print(9); }";
+    const std::string       source = "{ int a1b; print(9); }";
     common::DiagnosisEngine diagnostics;
     lexer::Lexer            lexer{diagnostics};
     testing::internal::CaptureStderr();
     const auto tokens          = lexer.Tokenize(source);
     const auto lexical_reports = testing::internal::GetCapturedStderr();
-    EXPECT_EQ(lexical_reports, "1:18: error: invalid identifier: 'a1b'\n");
+    EXPECT_EQ(lexical_reports, "1:7: error: invalid identifier: 'a1b'\n");
     ASSERT_TRUE(diagnostics.HasErrors());
     parser::Parser parser{source, tokens, diagnostics};
     testing::internal::CaptureStderr();
@@ -716,8 +778,8 @@ TEST(ParserLifecycleTest,
     EXPECT_FALSE(second.has_syntax_errors);
     EXPECT_TRUE(diagnostics.HasErrors());
     EXPECT_NE(first.translation_unit.get(), second.translation_unit.get());
-    const auto* first_body  = MainBody(first);
-    const auto* second_body = MainBody(second);
+    const auto* first_body  = OnlyBlock(first);
+    const auto* second_body = OnlyBlock(second);
     ASSERT_NE(first_body, nullptr);
     ASSERT_NE(second_body, nullptr);
     ASSERT_EQ(first_body->body.size(), 1U);
@@ -731,8 +793,7 @@ TEST(ParserLifecycleTest,
 TEST(ParserLifecycleTest, TreesOwnSpellingsAfterAllBorrowedInputsAreDestroyed) {
     parser::ParseResult result;
     {
-        const std::string source =
-            "int main() { int answer12 = 00042; print(answer12); }";
+        const std::string source = "{ int answer12 = 00042; print(answer12); }";
         common::DiagnosisEngine diagnostics;
         lexer::Lexer            lexer{diagnostics};
         const auto              tokens = lexer.Tokenize(source);
@@ -740,7 +801,7 @@ TEST(ParserLifecycleTest, TreesOwnSpellingsAfterAllBorrowedInputsAreDestroyed) {
         result = parser.ParseTranslationUnit();
         EXPECT_FALSE(result.has_syntax_errors);
     }
-    const auto* body = MainBody(result);
+    const auto* body = OnlyBlock(result);
     ASSERT_NE(body, nullptr);
     ASSERT_EQ(body->body.size(), 2U);
     const auto* variable = Variable(body->body[0].get());
@@ -783,6 +844,7 @@ TEST(ParserComponentTest, DeclarationsAndAssignmentsLeaveCallerSeparators) {
     parser::Parser          parser{source, tokens, diagnostics};
     const auto assignment = parser::ParserTestAccess::Assignment(parser);
     ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->kind, ast::StmtKind::Assign);
     ExpectLocation(assignment->loc, 1, 1);
     ExpectLocation(assignment->target->loc, 1, 1);
     EXPECT_EQ(parser::ParserTestAccess::PeekKind(parser),

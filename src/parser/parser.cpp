@@ -91,41 +91,25 @@ ParseResult Parser::ParseTranslationUnit() {
     current_index_     = 0;
     has_syntax_errors_ = false;
     auto unit          = std::make_unique<ast::TranslationUnit>();
-    auto main          = ParseMainFunction();
-    if (main) {
-        unit->decls.push_back(std::move(main));
-        if (!AtEnd()) {
+    while (!AtEnd()) {
+        if (PeekKind() == TokenKind::r_brace) {
+            // There is no enclosing block owner at file scope. Consume this
+            // boundary rather than repeatedly yielding it during recovery.
             ReportSyntaxError(CurrentLocation(),
-                              "unexpected tokens after main function");
+                              "unexpected '}' at file scope");
+            Consume();
+            continue;
+        }
+        const auto start     = current_index_;
+        auto       statement = ParseStatement();
+        if (statement) {
+            unit->statements.push_back(std::move(statement));
+        } else if (tokens_[start].kind != TokenKind::kw_for) {
+            // Failed for parsers already own their synchronization.
+            RecoverStatement(start);
         }
     }
     return {std::move(unit), has_syntax_errors_};
-}
-
-std::unique_ptr<ast::FuncDecl> Parser::ParseMainFunction() {
-    const auto loc = CurrentLocation();
-    if (!Expect(TokenKind::kw_int, "expected 'int main()'")) {
-        return nullptr;
-    }
-    const auto* name = PeekToken();
-    if (!name || name->kind != TokenKind::identifier ||
-        name->lexeme != "main") {
-        ReportSyntaxError(CurrentLocation(), "expected 'main'");
-        return nullptr;
-    }
-    Consume();
-    if (!Expect(TokenKind::l_paren, "expected '(' after main") ||
-        !Expect(TokenKind::r_paren,
-                "expected ')' after main (parameters are unsupported)")) {
-        return nullptr;
-    }
-    auto body = ParseBlock();
-    if (!body) {
-        return nullptr;
-    }
-    return std::make_unique<ast::FuncDecl>(loc, ast::Type::Int, "main",
-                                           std::vector<ast::Param>{},
-                                           std::move(body));
 }
 
 void Parser::RecoverStatement(std::size_t statement_start) {
@@ -213,7 +197,7 @@ std::unique_ptr<ast::VarDecl> Parser::ParseDeclaration() {
                                           std::move(initializer));
 }
 
-std::unique_ptr<ast::AssignExpr> Parser::ParseAssignment() {
+std::unique_ptr<ast::AssignStmt> Parser::ParseAssignment() {
     const auto* name_token = PeekToken();
     if (name_token == nullptr || name_token->kind != TokenKind::identifier) {
         ReportSyntaxError(CurrentLocation(),
@@ -233,7 +217,7 @@ std::unique_ptr<ast::AssignExpr> Parser::ParseAssignment() {
     if (value == nullptr) {
         return nullptr;
     }
-    return std::make_unique<ast::AssignExpr>(location, std::move(target),
+    return std::make_unique<ast::AssignStmt>(location, std::move(target),
                                              std::move(value));
 }
 
@@ -295,7 +279,7 @@ ast::StmtPtr Parser::ParseStatement() {
                 !Expect(TokenKind::semi, "expected ';' after assignment")) {
                 return nullptr;
             }
-            return std::make_unique<ast::ExprStmt>(loc, std::move(assignment));
+            return assignment;
         }
         default:
             ReportSyntaxError(loc, "expected a supported statement");
@@ -385,7 +369,7 @@ ast::StmtPtr Parser::ParseForStatement() {
         if (!assignment) {
             return fail();
         }
-        init = std::make_unique<ast::ExprStmt>(init_loc, std::move(assignment));
+        init = std::move(assignment);
     }
     if (!Expect(TokenKind::semi, "expected ';' after for initializer")) {
         return fail();

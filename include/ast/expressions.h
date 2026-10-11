@@ -20,7 +20,6 @@ enum class ExprKind : std::uint8_t {
     DeclRef,
     Binary,
     Unary,
-    Assign,
     Call,
 };
 
@@ -104,16 +103,6 @@ struct UnaryExpr : Expr {
         : Expr{ExprKind::Unary, l}
         , op{o}
         , operand{std::move(e)} {}
-};
-
-struct AssignExpr : Expr {
-    ExprPtr target;  // lvalue
-    ExprPtr value;   // rvalue
-    AssignExpr(common::SourceLocation l, ExprPtr t, ExprPtr v)
-        : Expr{ExprKind::Assign, l}
-        , target{std::move(t)}
-        , value{std::move(v)} 
-    {}
 };
 
 struct CallExpr : Expr {

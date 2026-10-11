@@ -47,6 +47,8 @@ public:
     // not insert tokens. Absent optional children never stand in for malformed
     // required syntax; until error nodes exist, unrecoverable constructs are
     // omitted instead.
+    // Source files contain existing declarations/statements directly, possibly
+    // none. Functions are unsupported; no main or outer block is synthesized.
     [[nodiscard]] ParseResult ParseTranslationUnit();
 
 private:
@@ -86,15 +88,13 @@ private:
     void ReportSyntaxError(common::SourceLocation loc,
                            std::string_view       message);
 
-    // Program structure.
-    std::unique_ptr<ast::FuncDecl> ParseMainFunction();
-
+    // Explicit source blocks; file scope is parsed by ParseTranslationUnit().
     std::unique_ptr<ast::CompoundStmt> ParseBlock();
 
-    // Dispatch declarations/assignments, handle their ';', and wrap successful
-    // nodes in DeclStmt/ExprStmt. Other forms delegate to specialized
-    // statements or ParseBlock(). This stage does not resolve names or validate
-    // types.
+    // Dispatch declarations/assignments and handle their ';'. Declarations use
+    // DeclStmt wrappers; assignments are direct AssignStmt nodes. Other forms
+    // delegate to specialized statement parsers or ParseBlock(). This stage
+    // does not resolve names or validate types.
     ast::StmtPtr ParseStatement();
 
     // Reusable grammatical constructs.
@@ -105,7 +105,7 @@ private:
     // ParseExpression().
     std::unique_ptr<ast::VarDecl> ParseDeclaration();
 
-    std::unique_ptr<ast::AssignExpr> ParseAssignment();
+    std::unique_ptr<ast::AssignStmt> ParseAssignment();
 
     // Specialized statements.
     // Print and do/while own their terminating semicolons.
@@ -115,8 +115,8 @@ private:
 
     ast::StmtPtr ParseDoWhileStatement();
 
-    // Choose declaration or assignment for the mandatory initializer and wrap
-    // it directly; do not use unrestricted ParseStatement(). Own both header
+    // Choose a DeclStmt or AssignStmt for the mandatory initializer;
+    // do not use unrestricted ParseStatement(). Own both header
     // ';',
     // ')' and the braced body. Condition and assignment update are also
     // mandatory.

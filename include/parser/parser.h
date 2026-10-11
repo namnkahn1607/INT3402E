@@ -6,12 +6,14 @@
 #include <span>
 #include <string_view>
 
-#include "ast/ast.h"
+#include "ast/translation_unit.h"
 #include "common/diagnostic.h"
 #include "common/source_location.h"
 #include "lexer/token.h"
 
 namespace parser {
+
+using TokenKind = lexer::TokenKind;
 
 // Recursive descent for declarations/statements and Pratt expressions.
 // Authoritative grammar: openspec/specs/syntax-analysis/spec.md.
@@ -64,7 +66,7 @@ private:
         std::size_t lookahead = 0) const;
 
     // TokenKind::eof when lookahead reaches or exceeds the token span.
-    [[nodiscard]] lexer::TokenKind PeekKind(std::size_t lookahead = 0) const;
+    [[nodiscard]] TokenKind PeekKind(std::size_t lookahead = 0) const;
 
     // nullptr immediately at EOF, without advancing. Parser/recovery loops must
     // explicitly stop or yield at EOF, not retry no-op consumption
@@ -72,11 +74,11 @@ private:
     const lexer::Token* Consume();
 
     // Match(TokenKind::eof) always returns false: EOF is not consumable.
-    bool Match(lexer::TokenKind kind);
+    bool Match(TokenKind kind);
 
     // On failure, diagnose without choosing a contextual synchronization
     // strategy. Observe final EOF with AtEnd(), not Expect(TokenKind::eof).
-    bool Expect(lexer::TokenKind kind, std::string_view message);
+    bool Expect(TokenKind kind, std::string_view message);
 
     // At EOF, use the 1-based position after all source text, including trivia.
     [[nodiscard]] common::SourceLocation CurrentLocation() const;

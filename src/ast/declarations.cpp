@@ -1,6 +1,8 @@
-#include "ast/ast.h"
+#include "ast/declarations.h"
 
 #include <utility>
+
+#include "ast/statements.h"
 
 namespace ast {
 

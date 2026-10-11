@@ -32,8 +32,10 @@ ParsedSource ParseSource(const std::string& source,
     auto           reports = testing::internal::GetCapturedStderr();
     EXPECT_EQ(diagnostics.HasErrors(),
               lexical_errors || result.has_syntax_errors);
-    return {std::move(result), std::move(reports), tokens.size(),
-            diagnostics.HasErrors()};
+    return {.result      = std::move(result),
+            .diagnostics = std::move(reports),
+            .token_count = tokens.size(),
+            .has_errors  = diagnostics.HasErrors()};
 }
 
 std::vector<common::SourceLocation> ErrorLocations(
@@ -69,7 +71,7 @@ void ExpectValidExpression(const ast::Expr* expression) {
         case ast::ExprKind::DeclRef: break;
         case ast::ExprKind::Binary: {
             const auto& binary =
-                static_cast<const ast::BinaryExpr&>(*expression);
+                dynamic_cast<const ast::BinaryExpr&>(*expression);
             ExpectValidExpression(binary.lhs.get());
             ExpectValidExpression(binary.rhs.get());
             break;
@@ -85,18 +87,19 @@ void ExpectValidStatement(const ast::Stmt* statement) {
     switch (statement->kind) {
         case ast::StmtKind::Compound: {
             const auto& block =
-                static_cast<const ast::CompoundStmt&>(*statement);
+                dynamic_cast<const ast::CompoundStmt&>(*statement);
             for (const auto& child : block.body) {
                 ExpectValidStatement(child.get());
             }
             break;
         }
         case ast::StmtKind::Decl: {
-            const auto& wrapper = static_cast<const ast::DeclStmt&>(*statement);
+            const auto& wrapper =
+                dynamic_cast<const ast::DeclStmt&>(*statement);
             ASSERT_NE(wrapper.decl, nullptr);
             ASSERT_EQ(wrapper.decl->kind, ast::DeclKind::Var);
             const auto& declaration =
-                static_cast<const ast::VarDecl&>(*wrapper.decl);
+                dynamic_cast<const ast::VarDecl&>(*wrapper.decl);
             if (declaration.init) {
                 ExpectValidExpression(declaration.init.get());
             }
@@ -104,7 +107,7 @@ void ExpectValidStatement(const ast::Stmt* statement) {
         }
         case ast::StmtKind::Assign: {
             const auto& assignment =
-                static_cast<const ast::AssignStmt&>(*statement);
+                dynamic_cast<const ast::AssignStmt&>(*statement);
             ASSERT_NE(assignment.target, nullptr);
             EXPECT_EQ(assignment.target->kind, ast::ExprKind::DeclRef);
             ExpectValidExpression(assignment.target.get());
@@ -112,7 +115,8 @@ void ExpectValidStatement(const ast::Stmt* statement) {
             break;
         }
         case ast::StmtKind::If: {
-            const auto& selection = static_cast<const ast::IfStmt&>(*statement);
+            const auto& selection =
+                dynamic_cast<const ast::IfStmt&>(*statement);
             ExpectValidExpression(selection.condition.get());
             ExpectValidStatement(selection.then_branch.get());
             if (selection.else_branch) {
@@ -121,13 +125,14 @@ void ExpectValidStatement(const ast::Stmt* statement) {
             break;
         }
         case ast::StmtKind::DoWhile: {
-            const auto& loop = static_cast<const ast::DoWhileStmt&>(*statement);
+            const auto& loop =
+                dynamic_cast<const ast::DoWhileStmt&>(*statement);
             ExpectValidStatement(loop.body.get());
             ExpectValidExpression(loop.condition.get());
             break;
         }
         case ast::StmtKind::For: {
-            const auto& loop = static_cast<const ast::ForStmt&>(*statement);
+            const auto& loop = dynamic_cast<const ast::ForStmt&>(*statement);
             ASSERT_NE(loop.init, nullptr);
             EXPECT_TRUE(loop.init->kind == ast::StmtKind::Decl ||
                         loop.init->kind == ast::StmtKind::Assign);
@@ -140,7 +145,7 @@ void ExpectValidStatement(const ast::Stmt* statement) {
             break;
         }
         case ast::StmtKind::Print: {
-            const auto& print = static_cast<const ast::PrintStmt&>(*statement);
+            const auto& print = dynamic_cast<const ast::PrintStmt&>(*statement);
             ExpectValidExpression(print.value.get());
             break;
         }
@@ -172,13 +177,13 @@ const ast::PrintStmt* PrintAt(const ast::CompoundStmt& body,
         body.body[index]->kind != ast::StmtKind::Print) {
         return nullptr;
     }
-    return static_cast<const ast::PrintStmt*>(body.body[index].get());
+    return dynamic_cast<const ast::PrintStmt*>(body.body[index].get());
 }
 
 void ExpectInteger(const ast::Expr* expression, std::string_view spelling) {
     ASSERT_NE(expression, nullptr);
     ASSERT_EQ(expression->kind, ast::ExprKind::IntLiteral);
-    EXPECT_EQ(static_cast<const ast::IntLiteralExpr&>(*expression).spelling,
+    EXPECT_EQ(dynamic_cast<const ast::IntLiteralExpr&>(*expression).spelling,
               spelling);
 }
 
@@ -211,26 +216,39 @@ TEST(ParserRecovery, IndependentMultilineErrorsRetainAllSafelyReachedPrints) {
     ASSERT_NE(second, nullptr);
     ASSERT_NE(second->value, nullptr);
     ASSERT_EQ(second->value->kind, ast::ExprKind::DeclRef);
-    EXPECT_EQ(static_cast<const ast::DeclRefExpr&>(*second->value).name,
+    EXPECT_EQ(dynamic_cast<const ast::DeclRefExpr&>(*second->value).name,
               "flag");
     const auto* last = PrintAt(*body, 2);
     ASSERT_NE(last, nullptr);
     ASSERT_NE(last->value, nullptr);
     ASSERT_EQ(last->value->kind, ast::ExprKind::Binary);
-    const auto& addition = static_cast<const ast::BinaryExpr&>(*last->value);
+    const auto& addition = dynamic_cast<const ast::BinaryExpr&>(*last->value);
     EXPECT_EQ(addition.op, ast::BinaryOp::Add);
     ExpectInteger(addition.lhs.get(), "2");
     ASSERT_NE(addition.rhs, nullptr);
     ASSERT_EQ(addition.rhs->kind, ast::ExprKind::Binary);
     const auto& multiplication =
-        static_cast<const ast::BinaryExpr&>(*addition.rhs);
+        dynamic_cast<const ast::BinaryExpr&>(*addition.rhs);
     EXPECT_EQ(multiplication.op, ast::BinaryOp::Mul);
     ExpectInteger(multiplication.lhs.get(), "3");
     ExpectInteger(multiplication.rhs.get(), "4");
 }
 
-TEST(ParserRecovery,
-     MissingSemicolonSkipsToSafeBoundaryWithoutInsertingTokens) {
+// Next to PrintAt(). Returns "" on any mismatch so a failing EXPECT_EQ stays
+// readable instead of dereferencing a wrong node.
+std::string VarNameAt(const ast::CompoundStmt& block, std::size_t index) {
+    if (index >= block.body.size() || block.body[index] == nullptr ||
+        block.body[index]->kind != ast::StmtKind::Decl) {
+        return {};
+    }
+    const auto& stmt = dynamic_cast<const ast::DeclStmt&>(*block.body[index]);
+    if (stmt.decl == nullptr || stmt.decl->kind != ast::DeclKind::Var) {
+        return {};
+    }
+    return dynamic_cast<const ast::VarDecl&>(*stmt.decl).name;
+}
+
+TEST(ParserRecovery, MissingSemicolonAtLineEndKeepsCompleteStatement) {
     const auto parsed = ParseSource(
         "{\n"
         "int before; int x\n"
@@ -240,25 +258,40 @@ TEST(ParserRecovery,
     EXPECT_TRUE(parsed.result.has_syntax_errors);
     const auto errors = ErrorLocations(parsed.diagnostics);
     ASSERT_EQ(errors.size(), 1U) << parsed.diagnostics;
-    ExpectLocation(errors[0], 3, 1);
+    ExpectLocation(errors[0], 2, 18);
     ExpectValidPartialTree(parsed.result);
     const auto* body = OnlyBlock(parsed.result);
     ASSERT_NE(body, nullptr);
-    ASSERT_GE(body->body.size(), 2U);
-    ASSERT_NE(body->body[0], nullptr);
-    ASSERT_EQ(body->body[0]->kind, ast::StmtKind::Decl);
-    const auto& declaration = static_cast<const ast::DeclStmt&>(*body->body[0]);
-    ASSERT_NE(declaration.decl, nullptr);
-    ASSERT_EQ(declaration.decl->kind, ast::DeclKind::Var);
-    EXPECT_EQ(static_cast<const ast::VarDecl&>(*declaration.decl).name,
-              "before");
-    const auto* last = PrintAt(*body, body->body.size() - 1U);
+    ASSERT_EQ(body->body.size(), 4U);
+    EXPECT_EQ(VarNameAt(*body, 0), "before");
+    EXPECT_EQ(VarNameAt(*body, 1), "x");
+    const auto* first = PrintAt(*body, 2);
+    ASSERT_NE(first, nullptr);
+    ExpectInteger(first->value.get(), "1");
+    const auto* last = PrintAt(*body, 3);
     ASSERT_NE(last, nullptr);
     ExpectInteger(last->value.get(), "2");
-    for (std::size_t index = 1; index < body->body.size(); ++index) {
-        ASSERT_NE(body->body[index], nullptr);
-        EXPECT_NE(body->body[index]->kind, ast::StmtKind::Decl);
-    }
+}
+
+TEST(ParserRecovery,
+     MissingSemicolonMidLineSkipsToSafeBoundaryWithoutInsertingTokens) {
+    const auto parsed = ParseSource(
+        "{\n"
+        "int before; int x print(1); print(2);\n"
+        "}");
+
+    EXPECT_TRUE(parsed.result.has_syntax_errors);
+    const auto errors = ErrorLocations(parsed.diagnostics);
+    ASSERT_EQ(errors.size(), 1U) << parsed.diagnostics;
+    ExpectLocation(errors[0], 2, 19);
+    ExpectValidPartialTree(parsed.result);
+    const auto* body = OnlyBlock(parsed.result);
+    ASSERT_NE(body, nullptr);
+    ASSERT_EQ(body->body.size(), 2U);
+    EXPECT_EQ(VarNameAt(*body, 0), "before");
+    const auto* last = PrintAt(*body, 1);
+    ASSERT_NE(last, nullptr);
+    ExpectInteger(last->value.get(), "2");
 }
 
 TEST(ParserRecovery,
@@ -392,8 +425,7 @@ TEST(ParserRecovery,
           "{ if (true) { } else print(2); print(3); }",
           "{ do { print(1); } while (); print(2); }",
           "{ do { if (true) { print(1); } } print(2); }",
-          "{ for (int i = 0; true; i = 1) { if (true) { int x = } } "
-          "}",
+          "{ for (int i = 0; true; i = 1) { if (true) { int x = } } }",
           "{ { if (true { { int x; } } } print(3); }",
           "{ if (true) { do { print(1); } while (1 + } }",
           "{ for (int i = 0; (true; i = 1) { print(1); } }",
@@ -576,10 +608,10 @@ TEST(ParserRecovery, MalformedAssignmentsRetainLaterAssignmentStatements) {
     for (const auto& statement : statements) {
         ASSERT_EQ(statement->kind, ast::StmtKind::Assign);
     }
-    const auto& first = static_cast<const ast::AssignStmt&>(*statements[0]);
-    const auto& last  = static_cast<const ast::AssignStmt&>(*statements[1]);
-    EXPECT_EQ(static_cast<const ast::DeclRefExpr&>(*first.target).name, "y");
-    EXPECT_EQ(static_cast<const ast::DeclRefExpr&>(*last.target).name, "z");
+    const auto& first = dynamic_cast<const ast::AssignStmt&>(*statements[0]);
+    const auto& last  = dynamic_cast<const ast::AssignStmt&>(*statements[1]);
+    EXPECT_EQ(dynamic_cast<const ast::DeclRefExpr&>(*first.target).name, "y");
+    EXPECT_EQ(dynamic_cast<const ast::DeclRefExpr&>(*last.target).name, "z");
     ExpectLocation(first.loc, 2, 1);
     ExpectLocation(last.loc, 4, 1);
 }
@@ -598,10 +630,10 @@ TEST(ParserRecovery, UnsupportedFunctionsDoNotLeakBodiesOrEraseLaterItems) {
         ASSERT_EQ(statements[0]->kind, ast::StmtKind::Print);
         ASSERT_EQ(statements[1]->kind, ast::StmtKind::Print);
         ExpectInteger(
-            static_cast<const ast::PrintStmt&>(*statements[0]).value.get(),
+            dynamic_cast<const ast::PrintStmt&>(*statements[0]).value.get(),
             "1");
         ExpectInteger(
-            static_cast<const ast::PrintStmt&>(*statements[1]).value.get(),
+            dynamic_cast<const ast::PrintStmt&>(*statements[1]).value.get(),
             "3");
     }
 }

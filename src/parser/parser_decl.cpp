@@ -45,28 +45,4 @@ std::optional<ast::Type> Parser::ParseType() {
     return std::nullopt;
 }
 
-std::unique_ptr<ast::AssignStmt> Parser::ParseAssignment() {
-    const auto* name_token = PeekToken();
-    if (name_token == nullptr || name_token->kind != TokenKind::identifier) {
-        ReportSyntaxError(CurrentLocation(),
-                          "expected a valid assignment target");
-        return nullptr;
-    }
-    const auto location = name_token->loc;
-    auto       target =
-        std::make_unique<ast::DeclRefExpr>(location, name_token->lexeme);
-    Consume();
-    if (!Expect(lexer::TokenKind::equal,
-                "expected '=' after assignment target")) {
-        return nullptr;
-    }
-
-    auto value = ParseExpression();
-    if (value == nullptr) {
-        return nullptr;
-    }
-    return std::make_unique<ast::AssignStmt>(location, std::move(target),
-                                             std::move(value));
-}
-
 }  // namespace parser

@@ -40,6 +40,32 @@ printf 'int answer = 42;\n' | ./build/debug/src/int3402e
 
 It prints tokens to stdout and diagnostics to stderr.
 
+## Current parser syntax
+
+For the supported context-free grammar (CFG), see [docs/CFG.md](docs/CFG.md).
+
+The parser library accepts declarations and statements directly, without a
+function or outer-block wrapper:ss
+
+```cpp
+int x = 1;
+bool ready = true;
+if (ready) { print(x); }
+x = x + 1;
+```
+
+Function declarations and definitions, including `int main()`, are deferred.
+`main` is an ordinary identifier; `print` remains a keyword and built-in statement.
+Empty source files are valid. The owning `ast::TranslationUnit::statements` list
+preserves source order, with variable declarations wrapped in `DeclStmt`.
+See the [syntax-analysis specification](openspec/specs/syntax-analysis/spec.md)
+for the authoritative grammar and remaining restrictions.
+
+The CLI remains lexer-only. Semantic analysis, execution, and code generation
+are not delivered by the parser.
+
+## Build details
+
 Presets must be selected explicitly. Use `release` for an optimized build.
 CMake chooses the system compiler by default. To choose another compiler,
 specify `CXX=<compiler> cmake --preset <preset>` on the first configure of a

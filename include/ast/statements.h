@@ -18,8 +18,6 @@ enum class StmtKind : std::uint8_t {
     Compound,
     Decl,
     Assign,
-    Expr,
-    Return,
     If,
     DoWhile,
     For,
@@ -54,19 +52,6 @@ struct AssignStmt : Stmt {
         : Stmt{StmtKind::Assign, l}
         , target{std::move(t)}
         , value{std::move(v)} {}
-};
-
-// Prototype only: general expression statements are not in the current grammar.
-struct ExprStmt : Stmt {
-    ExprPtr expr;
-    ExprStmt(common::SourceLocation l, ExprPtr e)
-        : Stmt{StmtKind::Expr, l}, expr{std::move(e)} {}
-};
-
-struct ReturnStmt : Stmt {
-    ExprPtr value;  // `nullptr` in a void function return
-    ReturnStmt(common::SourceLocation l, ExprPtr v)
-        : Stmt{StmtKind::Return, l}, value{std::move(v)} {}
 };
 
 struct IfStmt : Stmt {

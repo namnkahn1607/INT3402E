@@ -4,7 +4,6 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "common/source_location.h"
 
@@ -15,12 +14,9 @@ using ExprPtr = std::unique_ptr<Expr>;
 
 enum class ExprKind : std::uint8_t {
     IntLiteral,
-    FloatLiteral,
     BoolLiteral,
     DeclRef,
     Binary,
-    Unary,
-    Call,
 };
 
 struct Expr {
@@ -39,14 +35,6 @@ struct IntLiteralExpr : Expr {
     std::string spelling;
     IntLiteralExpr(common::SourceLocation l, std::string s)
         : Expr{ExprKind::IntLiteral, l}
-        , spelling{std::move(s)} 
-    {}
-};
-
-struct FloatLiteralExpr : Expr {
-    std::string spelling;
-    FloatLiteralExpr(common::SourceLocation l, std::string s)
-        : Expr{ExprKind::FloatLiteral, l}
         , spelling{std::move(s)} 
     {}
 };
@@ -71,7 +59,6 @@ enum class BinaryOp : std::uint8_t {
     Sub,  // '-'
     Mul,  // '*'
     Div,  // '/'
-    Mod,  // '%'
     Lt,   // '<'
     Le,   // '<='
     Gt,   // '>'
@@ -89,30 +76,6 @@ struct BinaryExpr : Expr {
         , lhs{std::move(a)}
         , rhs{std::move(b)} 
     {}
-};
-
-enum UnaryOp : std::uint8_t {
-    Neg,  // '-'
-    Not,  // '!'
-};
-
-struct UnaryExpr : Expr {
-    UnaryOp op;
-    ExprPtr operand;
-    UnaryExpr(common::SourceLocation l, UnaryOp o, ExprPtr e)
-        : Expr{ExprKind::Unary, l}
-        , op{o}
-        , operand{std::move(e)} {}
-};
-
-struct CallExpr : Expr {
-    std::string          callee;  // resolve to `FuncDecl`
-    std::vector<ExprPtr> args;
-        CallExpr(common::SourceLocation l, std::string c, std::vector<ExprPtr> a)
-            : Expr{ExprKind::Call, l}
-            , callee{std::move(c)}
-            , args{std::move(a)} 
-        {}
 };
 
 }  // namespace ast

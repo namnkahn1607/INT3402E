@@ -1,3 +1,3 @@
 add_module(ast
-    SOURCES declarations.cpp
+    SOURCES translation_unit.cpp
     DEPS_PUBLIC INT3402E::common)

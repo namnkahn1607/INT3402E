@@ -1,23 +1,35 @@
+#include <cstring>
 #include <iostream>
 #include <iterator>
 #include <string>
 #include <utility>
 
+#include "ast/translation_unit.h"
 #include "common/diagnostic.h"
 #include "common/source_load.h"
 #include "lexer/lexer.h"
+#include "parser/parser.h"
 
 int main(int argc, char* argv[]) {
-    if (argc > 2) {
-        std::cerr << "Usage: int3402e [source-file]\n";
-        return 1;
+    bool        dump_ast    = false;
+    const char* source_file = nullptr;
+
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--dump-ast") == 0) {
+            dump_ast = true;
+        } else if (source_file == nullptr) {
+            source_file = argv[i];
+        } else {
+            std::cerr << "Usage: int3402e [--dump-ast] [source-file]\n";
+            return 1;
+        }
     }
 
     common::DiagnosisEngine diag;
 
     std::string source;
-    if (argc == 2) {
-        auto loaded = common::LoadSourceFile(argv[1], diag);
+    if (source_file != nullptr) {
+        auto loaded = common::LoadSourceFile(source_file, diag);
         if (!loaded) {
             diag.Summarize();
             return 1;
@@ -33,6 +45,18 @@ int main(int argc, char* argv[]) {
 
     lexer::Lexer lex{diag};
     const auto   tokens = lex.Tokenize(source);
+
+    if (dump_ast) {
+        parser::Parser parser{source, tokens, diag};
+        auto           result = parser.ParseTranslationUnit();
+        if (diag.HasErrors()) {
+            diag.Summarize();
+            return 1;
+        }
+        ast::DumpAst(*result.translation_unit, std::cout);
+        return 0;
+    }
+
     if (diag.HasErrors()) {
         diag.Summarize();
         return 1;

@@ -12,4 +12,7 @@ struct TranslationUnit {
     std::vector<StmtPtr> statements;
 };
 
+// Print a human-readable tree representation of the AST.
+void DumpAst(const TranslationUnit& unit, std::ostream& out);
+
 }  // namespace ast

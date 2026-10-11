@@ -5,4 +5,4 @@ add_subdirectory(parser)
 
 add_executable(int3402e main.cpp)
 target_link_libraries(int3402e
-    PRIVATE INT3402E::lexer INT3402E::ast int3402e_options)
+    PRIVATE INT3402E::lexer INT3402E::ast INT3402E::parser int3402e_options)

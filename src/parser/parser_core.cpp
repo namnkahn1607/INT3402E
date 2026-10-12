@@ -1,142 +1,65 @@
 // clang-format off
-#include "ast/statements.h"
 #include "parser/parser.h"
 // clang-format on
 
-#include <string>
+#include <memory>
 #include <utility>
 
 namespace parser {
 
-Parser::Parser(std::string_view source, std::span<const lexer::Token> tokens,
+Parser::Parser(std::string_view source, std::span<const Token> tokens,
                common::DiagnosisEngine& diagnostics)
-    : source_{source}
-    , tokens_{tokens}
-    , diagnostics_{diagnostics}
-    , eof_location_{.line = 1, .col = 1} {
-    // Match Flex's byte columns: only LF starts a new line, including in
-    // trivia.
-    for (const char ch : source_) {
-        if (ch == '\n') {
-            ++eof_location_.line;
-            eof_location_.col = 1;
-        } else {
-            ++eof_location_.col;
-        }
-    }
-}
+    : cursor_{source, tokens, diagnostics}, expr_parser_{cursor_, *this} {}
 
-ParseResult Parser::ParseTranslationUnit() {
-    current_index_     = 0;
-    has_syntax_errors_ = false;
-    last_error_loc     = {};
-    auto unit          = std::make_unique<ast::TranslationUnit>();
-    while (!AtEnd()) {
-        if (PeekKind() == TokenKind::r_brace) {
+std::unique_ptr<ast::TranslationUnit> Parser::ParseTranslationUnit() {
+    cursor_.Reset();
+
+    auto unit = std::make_unique<ast::TranslationUnit>();
+    while (!cursor_.AtEnd()) {
+        if (cursor_.PeekKind() == TokenKind::r_brace) {
             // There is no enclosing block owner at file scope. Consume this
             // boundary rather than repeatedly yielding it during recovery.
-            ReportSyntaxError(CurrentLocation(),
-                              "unexpected '}' at file scope");
-            Consume();
+            cursor_.ReportSyntaxError(cursor_.CurrentLocation(),
+                                      "unexpected '}' at file scope");
+            cursor_.Consume();
             continue;
         }
         if (auto statement = ParseStatementOrRecover()) {
             unit->statements.push_back(std::move(statement));
         }
     }
-    return {.translation_unit  = std::move(unit),
-            .has_syntax_errors = has_syntax_errors_};
+    return unit;
 }
 
 bool Parser::ExpectTerminator(std::string_view message) {
-    if (Match(TokenKind::semi)) {
+    if (cursor_.Match(TokenKind::semi)) {
         return true;
     }
     // The statement itself parsed completely; only its ';' is missing. If the
     // next token is on a later line (or closes the block / file), the missing
     // ';' belongs right after the previous token. Report it there and keep the
     // statement, so the next statement is not swallowed by recovery.
-    const auto* next = PeekToken();
+    const auto* next     = cursor_.PeekToken();
+    const auto  curr_idx = cursor_.CurrentIndex();
     const bool  complete =
-        current_index_ > 0 &&
+        curr_idx > 0 &&
         (next == nullptr || next->kind == TokenKind::r_brace ||
-         next->loc.line > tokens_[current_index_ - 1].loc.line);
-    auto loc = CurrentLocation();
+         next->loc.line > cursor_.GetToken(curr_idx - 1).loc.line);
+    auto loc = cursor_.CurrentLocation();
     if (complete) {
-        const auto& previous = tokens_[current_index_ - 1];
+        const auto& previous = cursor_.GetToken(curr_idx - 1);
         loc                  = previous.loc;
         loc.col += static_cast<decltype(loc.col)>(previous.lexeme.size());
     }
-    ReportSyntaxError(loc, message);
+    cursor_.ReportSyntaxError(loc, message);
     return complete;
-}
-
-bool Parser::AtEnd() const { return current_index_ >= tokens_.size(); }
-
-const lexer::Token* Parser::PeekToken(std::size_t lookahead) const {
-    if (AtEnd() || lookahead >= tokens_.size() - current_index_) {
-        return nullptr;
-    }
-    return &tokens_[current_index_ + lookahead];
-}
-
-TokenKind Parser::PeekKind(std::size_t lookahead) const {
-    const auto* token = PeekToken(lookahead);
-    return token ? token->kind : TokenKind::eof;
-}
-
-const lexer::Token* Parser::Consume() {
-    const auto* token = PeekToken();
-    if (token) {
-        ++current_index_;
-    }
-    return token;
-}
-
-bool Parser::Match(TokenKind kind) {
-    if (kind == TokenKind::eof || PeekKind() != kind) {
-        return false;
-    }
-    Consume();
-    return true;
-}
-
-bool Parser::Expect(TokenKind kind, std::string_view message) {
-    if (Match(kind)) {
-        return true;
-    }
-    ReportSyntaxError(CurrentLocation(), message);
-    return false;
-}
-
-common::SourceLocation Parser::CurrentLocation() const {
-    const auto* token = PeekToken();
-    return token ? token->loc : eof_location_;
-}
-
-void Parser::ReportSyntaxError(common::SourceLocation loc,
-                               std::string_view       message) {
-    const auto* token = PeekToken();
-    if (token &&
-        (token->kind == TokenKind::invalid_identifier ||
-         token->kind == TokenKind::invalid_numeric_constant) &&
-        token->loc.line == loc.line && token->loc.col == loc.col) {
-        // Classification guarantees the lexer has already diagnosed this
-        // spelling. The caller still returns failure for contextual recovery.
-        return;
-    }
-    has_syntax_errors_ = true;
-    diagnostics_.Report({.line     = loc.line,
-                         .col      = loc.col,
-                         .severity = common::Severity::kError,
-                         .message  = std::string{message}});
 }
 
 ast::StmtPtr Parser::ParseStatementOrRecover() {
     // Only caller of RecoverStatement(): every ParseXxx below reports its
     // error once and returns nullptr; this function alone skips tokens.
-    const auto start      = current_index_;
-    const auto start_kind = PeekKind();
+    const auto start      = cursor_.CurrentIndex();
+    const auto start_kind = cursor_.PeekKind();
     auto       statement  = ParseStatement();
     if (statement) {
         return statement;
@@ -145,9 +68,10 @@ ast::StmtPtr Parser::ParseStatementOrRecover() {
     // Recovery from a failed `if` skips through its then-block. A trailing
     // `else` would then start a statement of its own and produce a bogus
     // second error, so skip that clause as well.
-    if (start_kind == TokenKind::kw_if && PeekKind() == TokenKind::kw_else) {
-        const auto else_start = current_index_;
-        Consume();
+    if (start_kind == TokenKind::kw_if &&
+        cursor_.PeekKind() == TokenKind::kw_else) {
+        const auto else_start = cursor_.CurrentIndex();
+        cursor_.Consume();
         RecoverStatement(else_start);
     }
     return nullptr;
@@ -156,7 +80,8 @@ ast::StmtPtr Parser::ParseStatementOrRecover() {
 void Parser::RecoverStatement(std::size_t statement_start) {
     std::size_t braces      = 0;
     std::size_t parentheses = 0;
-    bool        for_header = tokens_[statement_start].kind == TokenKind::kw_for;
+    bool        for_header =
+        cursor_.GetToken(statement_start).kind == TokenKind::kw_for;
 
     const auto track = [&](TokenKind kind) {
         if (kind == TokenKind::l_paren) {
@@ -178,20 +103,21 @@ void Parser::RecoverStatement(std::size_t statement_start) {
     };
 
     // Account for delimiters already consumed by the failed nested parser.
-    for (std::size_t index = statement_start; index < current_index_; ++index) {
-        track(tokens_[index].kind);
+    for (std::size_t index = statement_start; index < cursor_.CurrentIndex();
+         ++index) {
+        track(cursor_.GetToken(index).kind);
     }
-    while (!AtEnd()) {
-        const auto kind = PeekKind();
+    while (!cursor_.AtEnd()) {
+        const auto kind = cursor_.PeekKind();
         if (kind == TokenKind::r_brace && braces == 0) {
             return;  // The enclosing block consumes this boundary.
         }
         if (kind == TokenKind::semi && braces == 0 && !for_header) {
-            Consume();
+            cursor_.Consume();
             return;
         }
         track(kind);
-        Consume();
+        cursor_.Consume();
         if (kind == TokenKind::r_brace && braces == 0) {
             return;  // A skipped nested body is also a safe boundary.
         }

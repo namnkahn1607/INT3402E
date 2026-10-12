@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
             diag.Summarize();
             return 1;
         }
-        ast::DumpAst(*result.translation_unit, std::cout);
+        ast::DumpAst(*result, std::cout);
         return 0;
     }
 

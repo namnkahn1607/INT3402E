@@ -7,8 +7,8 @@
 namespace parser {
 
 ast::StmtPtr Parser::ParseStatement() {
-    const auto loc = CurrentLocation();
-    switch (PeekKind()) {
+    const auto loc = cursor_.CurrentLocation();
+    switch (cursor_.PeekKind()) {
         case TokenKind::kw_int:
         case TokenKind::kw_bool: {
             auto declaration = ParseDeclaration();
@@ -32,28 +32,28 @@ ast::StmtPtr Parser::ParseStatement() {
             return assignment;
         }
         default:
-            ReportSyntaxError(loc, "expected a supported statement");
+            cursor_.ReportSyntaxError(loc, "expected a supported statement");
             return nullptr;
     }
 }
 
 std::unique_ptr<ast::AssignStmt> Parser::ParseAssignment() {
-    const auto* name_token = PeekToken();
+    const auto* name_token = cursor_.PeekToken();
     if (name_token == nullptr || name_token->kind != TokenKind::identifier) {
-        ReportSyntaxError(CurrentLocation(),
-                          "expected a valid assignment target");
+        cursor_.ReportSyntaxError(cursor_.CurrentLocation(),
+                                  "expected a valid assignment target");
         return nullptr;
     }
     const auto location = name_token->loc;
     auto       target =
         std::make_unique<ast::DeclRefExpr>(location, name_token->lexeme);
-    Consume();
-    if (!Expect(lexer::TokenKind::equal,
-                "expected '=' after assignment target")) {
+    cursor_.Consume();
+    if (!cursor_.Expect(TokenKind::equal,
+                        "expected '=' after assignment target")) {
         return nullptr;
     }
 
-    auto value = ParseExpression();
+    auto value = expr_parser_.ParseExpression();
     if (value == nullptr) {
         return nullptr;
     }
@@ -62,12 +62,12 @@ std::unique_ptr<ast::AssignStmt> Parser::ParseAssignment() {
 }
 
 std::unique_ptr<ast::CompoundStmt> Parser::ParseBlock() {
-    const auto loc = CurrentLocation();
-    if (!Expect(TokenKind::l_brace, "expected '{' to start block")) {
+    const auto loc = cursor_.CurrentLocation();
+    if (!cursor_.Expect(TokenKind::l_brace, "expected '{' to start block")) {
         return nullptr;
     }
     auto block = std::make_unique<ast::CompoundStmt>(loc);
-    while (!AtEnd() && PeekKind() != TokenKind::r_brace) {
+    while (!cursor_.AtEnd() && cursor_.PeekKind() != TokenKind::r_brace) {
         if (auto statement = ParseStatementOrRecover()) {
             block->body.push_back(std::move(statement));
         }
@@ -75,20 +75,21 @@ std::unique_ptr<ast::CompoundStmt> Parser::ParseBlock() {
 
     // Also reached at EOF after a failed statement: a missing '}' is always
     // its own error and is never hidden by earlier diagnostics.
-    if (!Expect(TokenKind::r_brace, "expected '}' to close block")) {
+    if (!cursor_.Expect(TokenKind::r_brace, "expected '}' to close block")) {
         return nullptr;
     }
     return block;
 }
 
 ast::StmtPtr Parser::ParsePrintStatement() {
-    const auto loc = Consume()->loc;  // Dispatch matched kw_print.
-    if (!Expect(TokenKind::l_paren, "expected '(' after print")) {
+    const auto loc = cursor_.Consume()->loc;  // Dispatch matched kw_print.
+    if (!cursor_.Expect(TokenKind::l_paren, "expected '(' after print")) {
         return nullptr;
     }
-    auto value = ParseExpression();
+    auto value = expr_parser_.ParseExpression();
     if (!value ||
-        !Expect(TokenKind::r_paren, "expected ')' after print expression") ||
+        !cursor_.Expect(TokenKind::r_paren,
+                        "expected ')' after print expression") ||
         !ExpectTerminator("expected ';' after print")) {
         return nullptr;
     }
@@ -96,13 +97,13 @@ ast::StmtPtr Parser::ParsePrintStatement() {
 }
 
 ast::StmtPtr Parser::ParseIfStatement() {
-    const auto loc = Consume()->loc;
-    if (!Expect(TokenKind::l_paren, "expected '(' after if")) {
+    const auto loc = cursor_.Consume()->loc;
+    if (!cursor_.Expect(TokenKind::l_paren, "expected '(' after if")) {
         return nullptr;
     }
-    auto condition = ParseExpression();
-    if (!condition ||
-        !Expect(TokenKind::r_paren, "expected ')' after if condition")) {
+    auto condition = expr_parser_.ParseExpression();
+    if (!condition || !cursor_.Expect(TokenKind::r_paren,
+                                      "expected ')' after if condition")) {
         return nullptr;
     }
     auto then_branch = ParseBlock();
@@ -110,7 +111,7 @@ ast::StmtPtr Parser::ParseIfStatement() {
         return nullptr;
     }
     std::unique_ptr<ast::CompoundStmt> else_branch;
-    if (Match(TokenKind::kw_else)) {
+    if (cursor_.Match(TokenKind::kw_else)) {
         else_branch = ParseBlock();
         if (!else_branch) {
             return nullptr;
@@ -122,16 +123,18 @@ ast::StmtPtr Parser::ParseIfStatement() {
 }
 
 ast::StmtPtr Parser::ParseDoWhileStatement() {
-    const auto loc  = Consume()->loc;  // Dispatch matched kw_do.
+    const auto loc  = cursor_.Consume()->loc;  // Dispatch matched kw_do.
     auto       body = ParseBlock();
     if (!body ||
-        !Expect(TokenKind::kw_while, "expected 'while' after do body") ||
-        !Expect(TokenKind::l_paren, "expected '(' after while")) {
+        !cursor_.Expect(TokenKind::kw_while,
+                        "expected 'while' after do body") ||
+        !cursor_.Expect(TokenKind::l_paren, "expected '(' after while")) {
         return nullptr;
     }
-    auto condition = ParseExpression();
+    auto condition = expr_parser_.ParseExpression();
     if (!condition ||
-        !Expect(TokenKind::r_paren, "expected ')' after do condition") ||
+        !cursor_.Expect(TokenKind::r_paren,
+                        "expected ')' after do condition") ||
         !ExpectTerminator("expected ';' after do/while")) {
         return nullptr;
     }
@@ -140,13 +143,14 @@ ast::StmtPtr Parser::ParseDoWhileStatement() {
 }
 
 ast::StmtPtr Parser::ParseForStatement() {
-    const auto loc = Consume()->loc;
-    if (!Expect(TokenKind::l_paren, "expected '(' after for")) {
+    const auto loc = cursor_.Consume()->loc;
+    if (!cursor_.Expect(TokenKind::l_paren, "expected '(' after for")) {
         return nullptr;
     }
     ast::StmtPtr init;
-    const auto   init_loc = CurrentLocation();
-    if (PeekKind() == TokenKind::kw_int || PeekKind() == TokenKind::kw_bool) {
+    const auto   init_loc = cursor_.CurrentLocation();
+    if (cursor_.PeekKind() == TokenKind::kw_int ||
+        cursor_.PeekKind() == TokenKind::kw_bool) {
         auto declaration = ParseDeclaration();
         if (!declaration) {
             return nullptr;
@@ -160,16 +164,18 @@ ast::StmtPtr Parser::ParseForStatement() {
         }
         init = std::move(assignment);
     }
-    if (!Expect(TokenKind::semi, "expected ';' after for initializer")) {
+    if (!cursor_.Expect(TokenKind::semi,
+                        "expected ';' after for initializer")) {
         return nullptr;
     }
-    auto condition = ParseExpression();
+    auto condition = expr_parser_.ParseExpression();
     if (!condition ||
-        !Expect(TokenKind::semi, "expected ';' after for condition")) {
+        !cursor_.Expect(TokenKind::semi, "expected ';' after for condition")) {
         return nullptr;
     }
     auto step = ParseAssignment();
-    if (!step || !Expect(TokenKind::r_paren, "expected ')' after for update")) {
+    if (!step ||
+        !cursor_.Expect(TokenKind::r_paren, "expected ')' after for update")) {
         return nullptr;
     }
     auto body = ParseBlock();

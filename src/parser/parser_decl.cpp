@@ -8,23 +8,24 @@
 namespace parser {
 
 std::unique_ptr<ast::VarDecl> Parser::ParseDeclaration() {
-    const auto location = CurrentLocation();
+    const auto location = cursor_.CurrentLocation();
     const auto type     = ParseType();
     if (!type) {
         return nullptr;
     }
 
-    const auto* name_token = PeekToken();
+    const auto* name_token = cursor_.PeekToken();
     if (name_token == nullptr || name_token->kind != TokenKind::identifier) {
-        ReportSyntaxError(CurrentLocation(), "expected a valid variable name");
+        cursor_.ReportSyntaxError(cursor_.CurrentLocation(),
+                                  "expected a valid variable name");
         return nullptr;
     }
     std::string name = name_token->lexeme;
-    Consume();
+    cursor_.Consume();
 
     ast::ExprPtr initializer;
-    if (Match(lexer::TokenKind::equal)) {
-        initializer = ParseExpression();
+    if (cursor_.Match(TokenKind::equal)) {
+        initializer = expr_parser_.ParseExpression();
         if (initializer == nullptr) {
             // A failed initializer is not an uninitialized declaration.
             return nullptr;
@@ -35,13 +36,14 @@ std::unique_ptr<ast::VarDecl> Parser::ParseDeclaration() {
 }
 
 std::optional<ast::Type> Parser::ParseType() {
-    if (Match(lexer::TokenKind::kw_int)) {
+    if (cursor_.Match(TokenKind::kw_int)) {
         return ast::Type::Int;
     }
-    if (Match(lexer::TokenKind::kw_bool)) {
+    if (cursor_.Match(TokenKind::kw_bool)) {
         return ast::Type::Bool;
     }
-    ReportSyntaxError(CurrentLocation(), "expected 'int' or 'bool'");
+    cursor_.ReportSyntaxError(cursor_.CurrentLocation(),
+                              "expected 'int' or 'bool'");
     return std::nullopt;
 }
 

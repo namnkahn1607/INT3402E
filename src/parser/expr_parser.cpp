@@ -1,8 +1,9 @@
-// clang-format off
-#include "parser/parser.h"
-// clang-format on
+#include "parser/expr_parser.h"
 
+#include <optional>
 #include <utility>
+
+#include "ast/expressions.h"
 
 namespace {
 
@@ -42,10 +43,11 @@ std::optional<InfixOperator> GetInfixOperator(lexer::TokenKind kind) {
 
 namespace parser {
 
-ast::ExprPtr Parser::ParsePrimary() {
-    const auto* token = PeekToken();
+ast::ExprPtr ExprParser::ParsePrimary() {
+    const auto* token = cursor_.PeekToken();
     if (token == nullptr) {
-        ReportSyntaxError(CurrentLocation(), "expected an expression");
+        cursor_.ReportSyntaxError(cursor_.CurrentLocation(),
+                                  "expected an expression");
         return nullptr;
     }
 
@@ -53,41 +55,42 @@ ast::ExprPtr Parser::ParsePrimary() {
         case TokenKind::identifier: {
             auto expression =
                 std::make_unique<ast::DeclRefExpr>(token->loc, token->lexeme);
-            Consume();
+            cursor_.Consume();
             return expression;
         }
         case TokenKind::numeric_constant: {
             auto expression = std::make_unique<ast::IntLiteralExpr>(
                 token->loc, token->lexeme);
-            Consume();
+            cursor_.Consume();
             return expression;
         }
         case TokenKind::kw_true:
         case TokenKind::kw_false: {
             auto expression = std::make_unique<ast::BoolLiteralExpr>(
                 token->loc, token->kind == TokenKind::kw_true);
-            Consume();
+            cursor_.Consume();
             return expression;
         }
         case TokenKind::l_paren: {
-            Consume();
+            cursor_.Consume();
             auto expression = ParseExpression();
             if (expression == nullptr) {
                 return nullptr;
             }
-            if (!Expect(TokenKind::r_paren,
-                        "expected ')' after parenthesized expression")) {
+            if (!cursor_.Expect(
+                    TokenKind::r_paren,
+                    "expected ')' after parenthesized expression")) {
                 return nullptr;
             }
             return expression;
         }
         default:
-            ReportSyntaxError(token->loc, "expected an expression");
+            cursor_.ReportSyntaxError(token->loc, "expected an expression");
             return nullptr;
     }
 }
 
-ast::ExprPtr Parser::ParseExpression(int min_binding_power) {
+ast::ExprPtr ExprParser::ParseExpression(int min_binding_power) {
     auto left = ParsePrimary();
     if (left == nullptr) {
         return nullptr;
@@ -98,8 +101,8 @@ ast::ExprPtr Parser::ParseExpression(int min_binding_power) {
     // productions.
     bool has_comparison = false;
     bool has_equality   = false;
-    while (!AtEnd()) {
-        const auto kind  = PeekKind();
+    while (!cursor_.AtEnd()) {
+        const auto kind  = cursor_.PeekKind();
         const auto infix = GetInfixOperator(kind);
 
         // An expression ends at the first token that cannot continue it. The
@@ -114,16 +117,16 @@ ast::ExprPtr Parser::ParseExpression(int min_binding_power) {
         const bool is_equality = kind == TokenKind::equalequal;
         if ((is_comparison && has_comparison) ||
             (is_equality && has_equality)) {
-            ReportSyntaxError(
-                CurrentLocation(),
+            cursor_.ReportSyntaxError(
+                cursor_.CurrentLocation(),
                 "chained comparison or equality is not supported");
             return nullptr;
         }
         has_comparison = has_comparison || is_comparison;
         has_equality   = has_equality || is_equality;
 
-        const auto location = CurrentLocation();
-        Consume();
+        const auto location = cursor_.CurrentLocation();
+        cursor_.Consume();
         auto right = ParseExpression(infix->right_binding_power);
         if (right == nullptr) {
             return nullptr;

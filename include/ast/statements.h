@@ -45,8 +45,10 @@ struct DeclStmt : Stmt {
         : Stmt{StmtKind::Decl, l}, decl{std::move(d)} {}
 };
 
+// Assignments are first-class statements instead of expressions, this helps
+// eliminate a whole class of bugs related to `a = b = c` or `if (x = 1)`.
 struct AssignStmt : Stmt {
-    ExprPtr target;  // Identifier reference; assignment is not an expression.
+    ExprPtr target;
     ExprPtr value;
     AssignStmt(common::SourceLocation l, ExprPtr t, ExprPtr v)
         : Stmt{StmtKind::Assign, l}

@@ -1,18 +1,17 @@
 .aider*
 
+.agents/
 .cache/
+.codex/
 .vscode/
 bin/
 build/
 out/
 .env
 
-.agents
-.codex
-
+compile_commands.json
 lang_feature_demo.cpp
 prompt.txt
 token_stream.txt
 
-compile_commands.json
 sample.txt

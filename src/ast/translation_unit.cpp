@@ -5,6 +5,7 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <variant>
 
 namespace ast {
 
@@ -185,11 +186,15 @@ void DumpStmt(const Stmt& stmt, std::ostream& out, const std::string& prefix,
             out << "ForStmt ";
             PrintLocation(out, node.loc);
             out << '\n';
-            assert(node.init && "ForStmt missing init");
             assert(node.condition && "ForStmt missing condition");
             assert(node.step && "ForStmt missing step");
             assert(node.body && "ForStmt missing body");
-            DumpStmt(*node.init, out, child_prefix, false);
+            std::visit(
+                [&](const auto& init) {
+                    assert(init && "ForStmt missing init");
+                    DumpStmt(*init, out, child_prefix, false);
+                },
+                node.init);
             DumpExpr(*node.condition, out, child_prefix, false);
             DumpStmt(*node.step, out, child_prefix, false);
             DumpStmt(*node.body, out, child_prefix, true);

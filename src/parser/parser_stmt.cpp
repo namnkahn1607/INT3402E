@@ -147,7 +147,7 @@ ast::StmtPtr Parser::ParseForStatement() {
     if (!cursor_.Expect(TokenKind::l_paren, "expected '(' after for")) {
         return nullptr;
     }
-    ast::StmtPtr init;
+    ast::ForInit init;
     const auto   init_loc = cursor_.CurrentLocation();
     if (cursor_.PeekKind() == TokenKind::kw_int ||
         cursor_.PeekKind() == TokenKind::kw_bool) {

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "ast/declarations.h"
@@ -81,13 +82,17 @@ struct DoWhileStmt : Stmt {
         , condition{std::move(c)} {}
 };
 
+// Grammar: ForInitializer -> Declaration | Assignment
+using ForInit =
+    std::variant<std::unique_ptr<DeclStmt>, std::unique_ptr<AssignStmt>>;
+
 struct ForStmt : Stmt {
-    StmtPtr                       init;  // `DeclStmt` or `AssignStmt`
+    ForInit                       init;
     ExprPtr                       condition;
     std::unique_ptr<AssignStmt>   step;
     std::unique_ptr<CompoundStmt> body;
 
-    ForStmt(common::SourceLocation l, StmtPtr i, ExprPtr c,
+    ForStmt(common::SourceLocation l, ForInit i, ExprPtr c,
             std::unique_ptr<AssignStmt>   s,
             std::unique_ptr<CompoundStmt> loop_body)
         : Stmt{StmtKind::For, l}

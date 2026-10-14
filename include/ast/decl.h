@@ -5,7 +5,7 @@
 #include <string>
 #include <utility>
 
-#include "ast/expressions.h"
+#include "ast/expr.h"
 #include "common/location.h"
 
 namespace ast {

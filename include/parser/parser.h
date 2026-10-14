@@ -6,8 +6,8 @@
 #include <span>
 #include <string_view>
 
-#include "ast/declarations.h"
-#include "ast/statements.h"
+#include "ast/decl.h"
+#include "ast/stmt.h"
 #include "ast/translation_unit.h"
 #include "common/diagnostic.h"
 #include "cursor.h"

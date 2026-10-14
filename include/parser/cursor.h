@@ -97,17 +97,13 @@ public:
             // The caller still returns failure for contextual recovery.
             return;
         }
-        has_syntax_errors_ = true;
         diagnostics_.Report({.loc      = {.line = loc.line, .col = loc.col},
                              .severity = common::Severity::kError,
                              .message  = std::string{msg}});
     }
 
     // Resets the cursor back to its primary state.
-    void Reset() noexcept {
-        current_index_     = 0;
-        has_syntax_errors_ = false;
-    }
+    void Reset() noexcept { current_index_ = 0; }
 
     [[nodiscard]] std::size_t CurrentIndex() const noexcept {
         return current_index_;
@@ -117,17 +113,12 @@ public:
         return tokens_[index];
     }
 
-    [[nodiscard]] bool HasSyntaxErrors() const noexcept {
-        return has_syntax_errors_;
-    }
-
 private:
     std::string_view         source_;
     std::span<const Token>   tokens_;
     common::DiagnosisEngine& diagnostics_;
     std::size_t              current_index_ = 0;
     common::Location         eof_location_{};
-    bool                     has_syntax_errors_ = false;
 };
 
 }  // namespace parser

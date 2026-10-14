@@ -2,12 +2,11 @@
 
 #include <vector>
 
-#include "ast/statements.h"
+#include "ast/stmt.h"
 
 namespace ast {
 
 // Function-free source file: declarations and statements in source order.
-// Variable declarations use DeclStmt, just as they do within blocks.
 struct TranslationUnit {
     std::vector<StmtPtr> statements;
 };

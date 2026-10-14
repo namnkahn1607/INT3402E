@@ -6,8 +6,8 @@
 #include <variant>
 #include <vector>
 
-#include "ast/declarations.h"
-#include "ast/expressions.h"
+#include "ast/decl.h"
+#include "ast/expr.h"
 #include "common/location.h"
 
 namespace ast {

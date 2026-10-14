@@ -78,7 +78,7 @@ public:
     }
 
     // At EOF, use the 1-based position after all source text, including trivia.
-    [[nodiscard]] common::SourceLocation CurrentLocation() const {
+    [[nodiscard]] common::Location CurrentLocation() const {
         const auto* token = PeekToken();
         return token != nullptr ? token->loc : eof_location_;
     }
@@ -87,7 +87,7 @@ public:
     // except at already-diagnosed invalid spelling tokens: propagate failure
     // without re-reporting the lexical error or changing local syntax status.
     // Its sticky return value/HasErrors() cannot determine local parse success.
-    void ReportSyntaxError(common::SourceLocation loc, std::string_view msg) {
+    void ReportSyntaxError(common::Location loc, std::string_view msg) {
         const auto* token = PeekToken();
         if (token &&
             (token->kind == TokenKind::invalid_identifier ||
@@ -98,8 +98,7 @@ public:
             return;
         }
         has_syntax_errors_ = true;
-        diagnostics_.Report({.line     = loc.line,
-                             .col      = loc.col,
+        diagnostics_.Report({.loc      = {.line = loc.line, .col = loc.col},
                              .severity = common::Severity::kError,
                              .message  = std::string{msg}});
     }
@@ -127,7 +126,7 @@ private:
     std::span<const Token>   tokens_;
     common::DiagnosisEngine& diagnostics_;
     std::size_t              current_index_ = 0;
-    common::SourceLocation   eof_location_{};
+    common::Location         eof_location_{};
     bool                     has_syntax_errors_ = false;
 };
 

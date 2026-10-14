@@ -1,4 +1,4 @@
-#include "common/source_load.h"
+#include "common/source.h"
 
 #include <fstream>
 #include <ios>
@@ -10,12 +10,11 @@
 
 namespace common {
 
-std::optional<SourceBuf> LoadSourceFile(const std::string& path,
-                                        DiagnosisEngine&   diag) {
+std::optional<SourceBuf> LoadSource(const std::string& path,
+                                    DiagnosisEngine&   diag) {
     std::ifstream file{path, std::ios::binary};
     if (!file) {
-        diag.Report({.line     = 0,
-                     .col      = 0,
+        diag.Report({.loc      = {.line = 0, .col = 0},
                      .severity = Severity::kError,
                      .message  = "cannot open source: " + path});
         return std::nullopt;
@@ -24,8 +23,7 @@ std::optional<SourceBuf> LoadSourceFile(const std::string& path,
     file.seekg(0, std::ios::end);
     std::streamsize size = file.tellg();
     if (size < 0) {
-        diag.Report({.line     = 0,
-                     .col      = 0,
+        diag.Report({.loc      = {.line = 0, .col = 0},
                      .severity = Severity::kError,
                      .message  = "cannot determine source size: " + path});
         return std::nullopt;
@@ -34,8 +32,7 @@ std::optional<SourceBuf> LoadSourceFile(const std::string& path,
 
     std::string content(static_cast<size_t>(size), '\0');
     if (!file.read(content.data(), size)) {
-        diag.Report({.line     = 0,
-                     .col      = 0,
+        diag.Report({.loc      = {.line = 0, .col = 0},
                      .severity = Severity::kError,
                      .message  = "failed reading source: " + path});
         return std::nullopt;

@@ -6,7 +6,7 @@
 #include <utility>
 
 #include "ast/expressions.h"
-#include "common/source_location.h"
+#include "common/location.h"
 
 namespace ast {
 
@@ -21,12 +21,12 @@ using DeclPtr = std::unique_ptr<Decl>;
 enum class DeclKind : std::uint8_t { Var };
 
 struct Decl {
-    DeclKind               kind;
-    common::SourceLocation loc;
+    DeclKind         kind;
+    common::Location loc;
     virtual ~Decl() = default;
 
 protected:
-    Decl(DeclKind k, common::SourceLocation l) : kind{k}, loc{l} {}
+    Decl(DeclKind k, common::Location l) : kind{k}, loc{l} {}
 };
 
 struct VarDecl : Decl {
@@ -34,8 +34,7 @@ struct VarDecl : Decl {
     std::string name;
     ExprPtr     init;  // `nullptr` if uninitialized
 
-    VarDecl(common::SourceLocation l, Type t, std::string n,
-            ExprPtr i = nullptr)
+    VarDecl(common::Location l, Type t, std::string n, ExprPtr i = nullptr)
         : Decl{DeclKind::Var, l}
         , type{t}
         , name{std::move(n)}

@@ -2,7 +2,7 @@
 
 namespace common {
 
-struct SourceLocation {
+struct Location {
     int line = 0;
     int col  = 0;
 };

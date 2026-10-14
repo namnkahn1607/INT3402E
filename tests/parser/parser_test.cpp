@@ -34,7 +34,7 @@ struct ParserTestAccess {
     static std::size_t Index(const Parser& parser) {
         return parser.current_index_;
     }
-    static common::SourceLocation Location(const Parser& parser) {
+    static common::Location Location(const Parser& parser) {
         return parser.CurrentLocation();
     }
     static ast::ExprPtr Expression(Parser& parser, int min_binding_power = 0) {
@@ -92,7 +92,7 @@ const ast::VarDecl* Variable(const ast::Stmt* statement) {
                : nullptr;
 }
 
-void ExpectLocation(common::SourceLocation location, int line, int column) {
+void ExpectLocation(common::Location location, int line, int column) {
     EXPECT_EQ(location.line, line);
     EXPECT_EQ(location.col, column);
 }

@@ -4,25 +4,27 @@
 
 namespace common {
 
-bool DiagnosisEngine::Report(const Diagnostic& d) noexcept {
+void DiagnosisEngine::Report(const Diagnostic& d) noexcept {
     const char* tag;
     if (d.severity == Severity::kError) {
-        tag        = "error";
-        err_found_ = true;
+        tag = "error";
+        collections_.push_back(d);
+        ++err_count_;
     } else {
         tag = "warning";
-        ++warning_count_;
+        ++warn_count_;
     }
 
-    std::cerr << d.line << ':' << d.col << ": " << tag << ": " << d.message
-              << '\n';
-    return err_found_;
+    std::cerr << d.loc.line << ':' << d.loc.col << ": " << tag << ": "
+              << d.message << '\n';
 }
 
 void DiagnosisEngine::Summarize() const noexcept {
-    std::cerr << warning_count_ << " warning(s) generated";
-    if (err_found_) {
-        std::cerr << ", compilation failed";
+    if (warn_count_ > 0) {
+        std::cerr << warn_count_ << " warning(s) generated";
+    }
+    if (err_count_ > 0) {
+        std::cerr << err_count_ << " error(s) found, compilation failed";
     }
     std::cerr << "\n";
 }

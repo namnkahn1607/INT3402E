@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-#include "common/source_location.h"
+#include "common/location.h"
 
 namespace lexer {
 
@@ -71,7 +71,7 @@ struct Token {
     TokenKind   kind;
     std::string lexeme;
 
-    common::SourceLocation loc;
+    common::Location loc;
 };
 
 }  // namespace lexer

@@ -5,7 +5,7 @@
 #include <string>
 #include <utility>
 
-#include "common/source_location.h"
+#include "common/location.h"
 
 namespace ast {
 
@@ -20,38 +20,30 @@ enum class ExprKind : std::uint8_t {
 };
 
 struct Expr {
-    ExprKind               kind;
-    common::SourceLocation loc;
+    ExprKind         kind;
+    common::Location loc;
     virtual ~Expr() = default;
 
 protected:
-    Expr(ExprKind k, common::SourceLocation l) 
-        : kind{k}
-        , loc{l} 
-    {}
+    Expr(ExprKind k, common::Location l) : kind{k}, loc{l} {}
 };
 
 struct IntLiteralExpr : Expr {
     std::string spelling;
-    IntLiteralExpr(common::SourceLocation l, std::string s)
-        : Expr{ExprKind::IntLiteral, l}
-        , spelling{std::move(s)} 
-    {}
+    IntLiteralExpr(common::Location l, std::string s)
+        : Expr{ExprKind::IntLiteral, l}, spelling{std::move(s)} {}
 };
 
 struct BoolLiteralExpr : Expr {
     bool value;
-    BoolLiteralExpr(common::SourceLocation l, bool v)
-        : Expr{ExprKind::BoolLiteral, l}
-        , value{v} {}
+    BoolLiteralExpr(common::Location l, bool v)
+        : Expr{ExprKind::BoolLiteral, l}, value{v} {}
 };
 
 struct DeclRefExpr : Expr {
     std::string name;
-    DeclRefExpr(common::SourceLocation l, std::string n)
-        : Expr{ExprKind::DeclRef, l}
-        , name{std::move(n)} 
-    {}
+    DeclRefExpr(common::Location l, std::string n)
+        : Expr{ExprKind::DeclRef, l}, name{std::move(n)} {}
 };
 
 enum class BinaryOp : std::uint8_t {
@@ -70,12 +62,11 @@ enum class BinaryOp : std::uint8_t {
 struct BinaryExpr : Expr {
     BinaryOp op;
     ExprPtr  lhs, rhs;
-    BinaryExpr(common::SourceLocation l, BinaryOp o, ExprPtr a, ExprPtr b)
+    BinaryExpr(common::Location l, BinaryOp o, ExprPtr a, ExprPtr b)
         : Expr{ExprKind::Binary, l}
         , op{o}
         , lhs{std::move(a)}
-        , rhs{std::move(b)} 
-    {}
+        , rhs{std::move(b)} {}
 };
 
 }  // namespace ast

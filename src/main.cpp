@@ -6,7 +6,7 @@
 
 #include "ast/translation_unit.h"
 #include "common/diagnostic.h"
-#include "common/source_load.h"
+#include "common/source.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
 
@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
 
     std::string source;
     if (source_file != nullptr) {
-        auto loaded = common::LoadSourceFile(source_file, diag);
+        auto loaded = common::LoadSource(source_file, diag);
         if (!loaded) {
             diag.Summarize();
             return 1;

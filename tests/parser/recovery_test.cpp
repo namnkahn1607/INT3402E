@@ -38,16 +38,15 @@ ParsedSource ParseSource(const std::string& source,
             .has_errors  = diagnostics.HasErrors()};
 }
 
-std::vector<common::SourceLocation> ErrorLocations(
-    std::string_view diagnostics) {
-    std::vector<common::SourceLocation> locations;
-    std::istringstream                  lines{std::string{diagnostics}};
-    std::string                         line;
+std::vector<common::Location> ErrorLocations(std::string_view diagnostics) {
+    std::vector<common::Location> locations;
+    std::istringstream            lines{std::string{diagnostics}};
+    std::string                   line;
     while (std::getline(lines, line)) {
         EXPECT_NE(line.find(": error: "), std::string::npos) << line;
-        std::istringstream     fields{line};
-        common::SourceLocation location;
-        char                   separator = '\0';
+        std::istringstream fields{line};
+        common::Location   location;
+        char               separator = '\0';
         fields >> location.line >> separator;
         EXPECT_EQ(separator, ':');
         fields >> location.col >> separator;
@@ -58,7 +57,7 @@ std::vector<common::SourceLocation> ErrorLocations(
     return locations;
 }
 
-void ExpectLocation(common::SourceLocation actual, int line, int column) {
+void ExpectLocation(common::Location actual, int line, int column) {
     EXPECT_EQ(actual.line, line);
     EXPECT_EQ(actual.col, column);
 }

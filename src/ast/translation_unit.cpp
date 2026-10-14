@@ -37,7 +37,7 @@ std::string_view BinaryOpToString(BinaryOp op) {
     return "?";
 }
 
-void PrintLocation(std::ostream& out, common::SourceLocation loc) {
+void PrintLocation(std::ostream& out, common::Location loc) {
     out << '<' << loc.line << ':' << loc.col << '>';
 }
 

@@ -13,7 +13,7 @@ struct SourceBuf {
 };
 
 // Stream data from source file into memory buffer.
-std::optional<SourceBuf> LoadSourceFile(const std::string& path,
-                                        DiagnosisEngine&   diag);
+std::optional<SourceBuf> LoadSource(const std::string& path,
+                                    DiagnosisEngine&   diag);
 
 }  // namespace common

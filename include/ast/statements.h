@@ -8,7 +8,7 @@
 
 #include "ast/declarations.h"
 #include "ast/expressions.h"
-#include "common/source_location.h"
+#include "common/location.h"
 
 namespace ast {
 
@@ -26,23 +26,22 @@ enum class StmtKind : std::uint8_t {
 };
 
 struct Stmt {
-    StmtKind               kind;
-    common::SourceLocation loc;
+    StmtKind         kind;
+    common::Location loc;
     virtual ~Stmt() = default;
 
 protected:
-    Stmt(StmtKind k, common::SourceLocation l) : kind{k}, loc{l} {}
+    Stmt(StmtKind k, common::Location l) : kind{k}, loc{l} {}
 };
 
 struct CompoundStmt : Stmt {
     std::vector<StmtPtr> body;
-    explicit CompoundStmt(common::SourceLocation l)
-        : Stmt{StmtKind::Compound, l} {}
+    explicit CompoundStmt(common::Location l) : Stmt{StmtKind::Compound, l} {}
 };
 
 struct DeclStmt : Stmt {
     DeclPtr decl;
-    DeclStmt(common::SourceLocation l, DeclPtr d)
+    DeclStmt(common::Location l, DeclPtr d)
         : Stmt{StmtKind::Decl, l}, decl{std::move(d)} {}
 };
 
@@ -51,7 +50,7 @@ struct DeclStmt : Stmt {
 struct AssignStmt : Stmt {
     ExprPtr target;
     ExprPtr value;
-    AssignStmt(common::SourceLocation l, ExprPtr t, ExprPtr v)
+    AssignStmt(common::Location l, ExprPtr t, ExprPtr v)
         : Stmt{StmtKind::Assign, l}
         , target{std::move(t)}
         , value{std::move(v)} {}
@@ -62,7 +61,7 @@ struct IfStmt : Stmt {
     std::unique_ptr<CompoundStmt> then_branch;
     std::unique_ptr<CompoundStmt> else_branch;  // `nullptr` if absent
 
-    IfStmt(common::SourceLocation l, ExprPtr c,
+    IfStmt(common::Location l, ExprPtr c,
            std::unique_ptr<CompoundStmt> then_body,
            std::unique_ptr<CompoundStmt> else_body = nullptr)
         : Stmt{StmtKind::If, l}
@@ -75,8 +74,8 @@ struct DoWhileStmt : Stmt {
     std::unique_ptr<CompoundStmt> body;
     ExprPtr                       condition;
 
-    DoWhileStmt(common::SourceLocation        l,
-                std::unique_ptr<CompoundStmt> loop_body, ExprPtr c)
+    DoWhileStmt(common::Location l, std::unique_ptr<CompoundStmt> loop_body,
+                ExprPtr c)
         : Stmt{StmtKind::DoWhile, l}
         , body{std::move(loop_body)}
         , condition{std::move(c)} {}
@@ -92,7 +91,7 @@ struct ForStmt : Stmt {
     std::unique_ptr<AssignStmt>   step;
     std::unique_ptr<CompoundStmt> body;
 
-    ForStmt(common::SourceLocation l, ForInit i, ExprPtr c,
+    ForStmt(common::Location l, ForInit i, ExprPtr c,
             std::unique_ptr<AssignStmt>   s,
             std::unique_ptr<CompoundStmt> loop_body)
         : Stmt{StmtKind::For, l}
@@ -104,7 +103,7 @@ struct ForStmt : Stmt {
 
 struct PrintStmt : Stmt {
     ExprPtr value;
-    PrintStmt(common::SourceLocation l, ExprPtr v)
+    PrintStmt(common::Location l, ExprPtr v)
         : Stmt{StmtKind::Print, l}, value{std::move(v)} {}
 };
 

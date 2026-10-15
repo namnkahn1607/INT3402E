@@ -3,7 +3,7 @@
 #include <optional>
 #include <utility>
 
-#include "ast/expressions.h"
+#include "ast/expr.h"
 
 namespace {
 

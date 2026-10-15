@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -31,7 +32,7 @@ public:
     void Summarize() const noexcept;
 
     // Collection of all `Diagnostic` reported so far.
-    [[nodiscard]] std::vector<Diagnostic> Collected() const noexcept {
+    [[nodiscard]] std::span<const Diagnostic> Collected() const noexcept {
         return collections_;
     }
 

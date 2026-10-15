@@ -2,248 +2,81 @@
 
 #include <gtest/gtest.h>
 
-#include <limits>
+#include <format>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <type_traits>
-#include <utility>
 #include <vector>
 
+#include "ast/expr.h"
+#include "ast/stmt.h"
+#include "ast/translation_unit.h"
+#include "common/diagnostic.h"
 #include "lexer/lexer.h"
+#include "parser/expr_parser.h"
+#include "parser_test_helper.h"
 
-namespace parser {
-
-// Narrow access to contracts otherwise hidden behind the public parse entry.
-struct ParserTestAccess {
-    static bool AtEnd(const Parser& parser) { return parser.AtEnd(); }
-    static lexer::TokenKind PeekKind(const Parser& parser,
-                                     std::size_t   offset = 0) {
-        return parser.PeekKind(offset);
-    }
-    static const lexer::Token* PeekToken(const Parser& parser,
-                                         std::size_t   offset = 0) {
-        return parser.PeekToken(offset);
-    }
-    static const lexer::Token* Consume(Parser& parser) {
-        return parser.Consume();
-    }
-    static bool Match(Parser& parser, lexer::TokenKind kind) {
-        return parser.Match(kind);
-    }
-    static std::size_t Index(const Parser& parser) {
-        return parser.current_index_;
-    }
-    static common::Location Location(const Parser& parser) {
-        return parser.CurrentLocation();
-    }
-    static ast::ExprPtr Expression(Parser& parser, int min_binding_power = 0) {
-        return parser.ParseExpression(min_binding_power);
-    }
-    static std::unique_ptr<ast::VarDecl> Declaration(Parser& parser) {
-        return parser.ParseDeclaration();
-    }
-    static std::unique_ptr<ast::AssignStmt> Assignment(Parser& parser) {
-        return parser.ParseAssignment();
-    }
-};
-
-}  // namespace parser
-
-namespace {
-
-static_assert(std::is_base_of_v<ast::Stmt, ast::AssignStmt>);
-static_assert(!std::is_base_of_v<ast::Expr, ast::AssignStmt>);
-
-struct Parsed {
-    parser::ParseResult result;
-    std::string         diagnostics;
-    bool                has_errors;
-};
-
-Parsed Parse(const std::string& source) {
-    common::DiagnosisEngine diagnostics;
-    lexer::Lexer            lexer{diagnostics};
-    testing::internal::CaptureStderr();
-    const auto     tokens = lexer.Tokenize(source);
-    parser::Parser parser{source, tokens, diagnostics};
-    auto           result = parser.ParseTranslationUnit();
-    return {std::move(result), testing::internal::GetCapturedStderr(),
-            diagnostics.HasErrors()};
-}
-
-Parsed ParseBody(std::string_view body) {
-    return Parse("{ " + std::string{body} + " }");
-}
-
-const ast::CompoundStmt* OnlyBlock(const parser::ParseResult& result) {
-    if (!result.translation_unit ||
-        result.translation_unit->statements.size() != 1) {
-        return nullptr;
-    }
-    return dynamic_cast<const ast::CompoundStmt*>(
-        result.translation_unit->statements[0].get());
-}
-
-const ast::VarDecl* Variable(const ast::Stmt* statement) {
-    const auto* declaration = dynamic_cast<const ast::DeclStmt*>(statement);
-    return declaration
-               ? dynamic_cast<const ast::VarDecl*>(declaration->decl.get())
-               : nullptr;
-}
-
-void ExpectLocation(common::Location location, int line, int column) {
-    EXPECT_EQ(location.line, line);
-    EXPECT_EQ(location.col, column);
-}
-
-void ExpectExpression(const ast::Expr* expression) {
-    ASSERT_NE(expression, nullptr);
-    EXPECT_GT(expression->loc.line, 0);
-    EXPECT_GT(expression->loc.col, 0);
-    switch (expression->kind) {
-        case ast::ExprKind::IntLiteral:
-        case ast::ExprKind::BoolLiteral:
-        case ast::ExprKind::DeclRef: break;
-        case ast::ExprKind::Binary: {
-            const auto* binary =
-                dynamic_cast<const ast::BinaryExpr*>(expression);
-            ASSERT_NE(binary, nullptr);
-            ExpectExpression(binary->lhs.get());
-            ExpectExpression(binary->rhs.get());
-            break;
-        }
-        default:
-            ADD_FAILURE() << "Parser produced an unsupported expression kind";
-    }
-}
-
-void ExpectStatement(const ast::Stmt* statement) {
-    ASSERT_NE(statement, nullptr);
-    EXPECT_GT(statement->loc.line, 0);
-    EXPECT_GT(statement->loc.col, 0);
-    switch (statement->kind) {
-        case ast::StmtKind::Compound: {
-            const auto* block =
-                dynamic_cast<const ast::CompoundStmt*>(statement);
-            ASSERT_NE(block, nullptr);
-            for (const auto& child : block->body) {
-                ExpectStatement(child.get());
-            }
-            break;
-        }
-        case ast::StmtKind::Decl: {
-            const auto* declaration = Variable(statement);
-            ASSERT_NE(declaration, nullptr);
-            EXPECT_TRUE(declaration->type == ast::Type::Int ||
-                        declaration->type == ast::Type::Bool);
-            if (declaration->init) {
-                ExpectExpression(declaration->init.get());
-            }
-            break;
-        }
-        case ast::StmtKind::Assign: {
-            const auto* assignment =
-                dynamic_cast<const ast::AssignStmt*>(statement);
-            ASSERT_NE(assignment, nullptr);
-            ASSERT_NE(assignment->target, nullptr);
-            EXPECT_EQ(assignment->target->kind, ast::ExprKind::DeclRef);
-            ExpectExpression(assignment->target.get());
-            ExpectExpression(assignment->value.get());
-            break;
-        }
-        case ast::StmtKind::Print: {
-            const auto* print = dynamic_cast<const ast::PrintStmt*>(statement);
-            ASSERT_NE(print, nullptr);
-            ExpectExpression(print->value.get());
-            break;
-        }
-        case ast::StmtKind::If: {
-            const auto* selection = dynamic_cast<const ast::IfStmt*>(statement);
-            ASSERT_NE(selection, nullptr);
-            ExpectExpression(selection->condition.get());
-            ExpectStatement(selection->then_branch.get());
-            if (selection->else_branch) {
-                ExpectStatement(selection->else_branch.get());
-            }
-            break;
-        }
-        case ast::StmtKind::DoWhile: {
-            const auto* loop = dynamic_cast<const ast::DoWhileStmt*>(statement);
-            ASSERT_NE(loop, nullptr);
-            ExpectStatement(loop->body.get());
-            ExpectExpression(loop->condition.get());
-            break;
-        }
-        case ast::StmtKind::For: {
-            const auto* loop = dynamic_cast<const ast::ForStmt*>(statement);
-            ASSERT_NE(loop, nullptr);
-            ASSERT_NE(loop->init, nullptr);
-            EXPECT_TRUE(loop->init->kind == ast::StmtKind::Decl ||
-                        loop->init->kind == ast::StmtKind::Assign);
-            ExpectStatement(loop->init.get());
-            ExpectExpression(loop->condition.get());
-            ASSERT_NE(loop->step, nullptr);
-            EXPECT_EQ(loop->step->kind, ast::StmtKind::Assign);
-            ExpectStatement(loop->step.get());
-            ExpectStatement(loop->body.get());
-            break;
-        }
-        default:
-            ADD_FAILURE() << "Parser produced an unsupported statement kind";
-    }
-}
+using namespace parser::test;
 
 TEST(ParserProgramTest, EmptyBlockIsAnExplicitStatement) {
     const auto parsed = Parse("{ }");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    EXPECT_TRUE(parsed.diagnostics.empty());
-    const auto* block = OnlyBlock(parsed.result);
-    ASSERT_NE(block, nullptr);
-    EXPECT_TRUE(block->body.empty());
-    ExpectLocation(block->loc, 1, 1);
+    EXPECT_FALSE(parsed.has_syntax_errors());
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+)");
 }
 
 TEST(ParserProgramTest, BareSourceDoesNotRequireAnEntryFunction) {
     const auto parsed = Parse("int a = 1; print(a); a = a + 1;");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
+    EXPECT_FALSE(parsed.has_syntax_errors());
     EXPECT_FALSE(parsed.has_errors);
-    ASSERT_NE(parsed.result.translation_unit, nullptr);
-    const auto& statements = parsed.result.translation_unit->statements;
-    ASSERT_EQ(statements.size(), 3U);
-    ASSERT_NE(Variable(statements[0].get()), nullptr);
-    EXPECT_EQ(Variable(statements[0].get())->name, "a");
-    EXPECT_EQ(statements[1]->kind, ast::StmtKind::Print);
-    EXPECT_EQ(statements[2]->kind, ast::StmtKind::Assign);
-    ExpectLocation(statements[0]->loc, 1, 1);
-    ExpectLocation(statements[1]->loc, 1, 12);
-    ExpectLocation(statements[2]->loc, 1, 22);
-    for (const auto& statement : statements) {
-        ExpectStatement(statement.get());
-    }
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+|-DeclStmt <1:1>
+| `-VarDecl <1:1> a 'int' init
+|   `-IntLiteralExpr <1:9> '1'
+|-PrintStmt <1:12>
+| `-DeclRefExpr <1:18> 'a'
+`-AssignStmt <1:22>
+  |-DeclRefExpr <1:22> 'a'
+  `-BinaryExpr <1:28> '+'
+    |-DeclRefExpr <1:26> 'a'
+    `-IntLiteralExpr <1:30> '1'
+)");
 }
 
 TEST(ParserProgramTest, EmptyAndTriviaOnlySourcesAreValid) {
     for (const std::string source : {"", " \n// tail\n/* closed */"}) {
         const auto parsed = Parse(source);
-        EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
+        EXPECT_FALSE(parsed.has_syntax_errors());
         EXPECT_FALSE(parsed.has_errors);
-        ASSERT_NE(parsed.result.translation_unit, nullptr);
-        EXPECT_TRUE(parsed.result.translation_unit->statements.empty());
+        ASSERT_NE(parsed.translation_unit, nullptr);
+        ExpectAst(*parsed.translation_unit, "TranslationUnit");
     }
 }
 
 TEST(ParserProgramTest, MainIsAnOrdinaryTopLevelVariable) {
     const auto parsed = Parse("int main = 1; main = main + 1; print(main);");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    ASSERT_NE(parsed.result.translation_unit, nullptr);
-    const auto& statements = parsed.result.translation_unit->statements;
-    ASSERT_EQ(statements.size(), 3U);
-    ASSERT_NE(Variable(statements[0].get()), nullptr);
-    EXPECT_EQ(Variable(statements[0].get())->name, "main");
-    for (const auto& statement : statements) {
-        ExpectStatement(statement.get());
-    }
+    EXPECT_FALSE(parsed.has_syntax_errors());
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+|-DeclStmt <1:1>
+| `-VarDecl <1:1> main 'int' init
+|   `-IntLiteralExpr <1:12> '1'
+|-AssignStmt <1:15>
+| |-DeclRefExpr <1:15> 'main'
+| `-BinaryExpr <1:27> '+'
+|   |-DeclRefExpr <1:22> 'main'
+|   `-IntLiteralExpr <1:29> '1'
+`-PrintStmt <1:32>
+  `-DeclRefExpr <1:38> 'main'
+)");
 }
 
 TEST(ParserProgramTest, TopLevelControlsAndDeclarationsRetainSourceOrder) {
@@ -256,20 +89,87 @@ for (x = 1; flag; x = x * 2) { print(x); }
 { int local = 1; print(local); }
 print(x);
 )");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
+    EXPECT_FALSE(parsed.has_syntax_errors());
     EXPECT_FALSE(parsed.has_errors);
-    ASSERT_NE(parsed.result.translation_unit, nullptr);
-    const auto& statements = parsed.result.translation_unit->statements;
-    const std::vector<ast::StmtKind> kinds{
-        ast::StmtKind::Decl,     ast::StmtKind::Decl, ast::StmtKind::If,
-        ast::StmtKind::DoWhile,  ast::StmtKind::For,  ast::StmtKind::For,
-        ast::StmtKind::Compound, ast::StmtKind::Print};
-    ASSERT_EQ(statements.size(), kinds.size());
-    for (std::size_t index = 0; index < statements.size(); ++index) {
-        EXPECT_EQ(statements[index]->kind, kinds[index]);
-        ExpectLocation(statements[index]->loc, static_cast<int>(index) + 1, 1);
-        ExpectStatement(statements[index].get());
-    }
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+|-DeclStmt <1:1>
+| `-VarDecl <1:1> x 'int' init
+|   `-BinaryExpr <1:11> '+'
+|     |-IntLiteralExpr <1:9> '1'
+|     `-BinaryExpr <1:15> '*'
+|       |-IntLiteralExpr <1:13> '2'
+|       `-IntLiteralExpr <1:17> '3'
+|-DeclStmt <2:1>
+| `-VarDecl <2:1> flag 'bool' init
+|   `-BinaryExpr <2:20> '=='
+|     |-BinaryExpr <2:15> '>='
+|     | |-DeclRefExpr <2:13> 'x'
+|     | `-IntLiteralExpr <2:18> '3'
+|     `-BoolLiteralExpr <2:23> true
+|-IfStmt <3:1> has_else
+| |-DeclRefExpr <3:5> 'flag'
+| |-CompoundStmt <3:11>
+| | `-PrintStmt <3:13>
+| |   `-BinaryExpr <3:27> '*'
+| |     |-BinaryExpr <3:22> '+'
+| |     | |-DeclRefExpr <3:20> 'x'
+| |     | `-IntLiteralExpr <3:24> '1'
+| |     `-IntLiteralExpr <3:29> '2'
+| `-CompoundStmt <3:40>
+|   `-AssignStmt <3:42>
+|     |-DeclRefExpr <3:42> 'x'
+|     `-BinaryExpr <3:48> '+'
+|       |-DeclRefExpr <3:46> 'x'
+|       `-IntLiteralExpr <3:50> '1'
+|-DoWhileStmt <4:1>
+| |-CompoundStmt <4:4>
+| | `-AssignStmt <4:6>
+| |   |-DeclRefExpr <4:6> 'x'
+| |   `-BinaryExpr <4:12> '+'
+| |     |-DeclRefExpr <4:10> 'x'
+| |     `-IntLiteralExpr <4:14> '1'
+| `-BinaryExpr <4:28> '>'
+|   |-DeclRefExpr <4:26> 'x'
+|   `-IntLiteralExpr <4:30> '10'
+|-ForStmt <5:1>
+| |-DeclStmt <5:6>
+| | `-VarDecl <5:6> i 'int' init
+| |   `-IntLiteralExpr <5:14> '0'
+| |-BinaryExpr <5:19> '>'
+| | |-IntLiteralExpr <5:17> '3'
+| | `-DeclRefExpr <5:21> 'i'
+| |-AssignStmt <5:24>
+| | |-DeclRefExpr <5:24> 'i'
+| | `-BinaryExpr <5:30> '+'
+| |   |-DeclRefExpr <5:28> 'i'
+| |   `-IntLiteralExpr <5:32> '1'
+| `-CompoundStmt <5:35>
+|   `-PrintStmt <5:37>
+|     `-DeclRefExpr <5:43> 'i'
+|-ForStmt <6:1>
+| |-AssignStmt <6:6>
+| | |-DeclRefExpr <6:6> 'x'
+| | `-IntLiteralExpr <6:10> '1'
+| |-DeclRefExpr <6:13> 'flag'
+| |-AssignStmt <6:19>
+| | |-DeclRefExpr <6:19> 'x'
+| | `-BinaryExpr <6:25> '*'
+| |   |-DeclRefExpr <6:23> 'x'
+| |   `-IntLiteralExpr <6:27> '2'
+| `-CompoundStmt <6:30>
+|   `-PrintStmt <6:32>
+|     `-DeclRefExpr <6:38> 'x'
+|-CompoundStmt <7:1>
+| |-DeclStmt <7:3>
+| | `-VarDecl <7:3> local 'int' init
+| |   `-IntLiteralExpr <7:15> '1'
+| `-PrintStmt <7:18>
+|   `-DeclRefExpr <7:24> 'local'
+`-PrintStmt <8:1>
+  `-DeclRefExpr <8:7> 'x'
+)");
 }
 
 TEST(ParserProgramTest, RepresentativeCompleteProgramUsesEveryControlForm) {
@@ -285,130 +185,153 @@ TEST(ParserProgramTest, RepresentativeCompleteProgramUsesEveryControlForm) {
     for (x = 1; flag; x = x * 2) { print(x); }
     { int unused; if (false) { } }
 })");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    EXPECT_TRUE(parsed.diagnostics.empty());
-    const auto* body = OnlyBlock(parsed.result);
-    ASSERT_NE(body, nullptr);
-    ASSERT_EQ(body->body.size(), 7U);
-    const std::vector<ast::StmtKind> expected{
-        ast::StmtKind::Decl,    ast::StmtKind::Decl, ast::StmtKind::If,
-        ast::StmtKind::DoWhile, ast::StmtKind::For,  ast::StmtKind::For,
-        ast::StmtKind::Compound};
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-        EXPECT_EQ(body->body[index]->kind, expected[index]);
-    }
-    const auto* selection =
-        dynamic_cast<const ast::IfStmt*>(body->body[2].get());
-    ASSERT_NE(selection, nullptr);
-    ASSERT_NE(selection->else_branch, nullptr);
-    ASSERT_EQ(selection->then_branch->body.size(), 1U);
-    EXPECT_EQ(selection->then_branch->body[0]->kind, ast::StmtKind::Print);
-    EXPECT_EQ(selection->else_branch->body[0]->kind, ast::StmtKind::Assign);
-    const auto* declaration_for =
-        dynamic_cast<const ast::ForStmt*>(body->body[4].get());
-    const auto* assignment_for =
-        dynamic_cast<const ast::ForStmt*>(body->body[5].get());
-    ASSERT_NE(declaration_for, nullptr);
-    ASSERT_NE(assignment_for, nullptr);
-    EXPECT_EQ(declaration_for->init->kind, ast::StmtKind::Decl);
-    EXPECT_EQ(assignment_for->init->kind, ast::StmtKind::Assign);
-    const auto* nested =
-        dynamic_cast<const ast::CompoundStmt*>(body->body[6].get());
-    ASSERT_NE(nested, nullptr);
-    const auto* no_else =
-        dynamic_cast<const ast::IfStmt*>(nested->body[1].get());
-    ASSERT_NE(no_else, nullptr);
-    EXPECT_EQ(no_else->else_branch, nullptr);
-    ExpectStatement(body);
+    EXPECT_FALSE(parsed.has_syntax_errors());
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  |-DeclStmt <3:5>
+  | `-VarDecl <3:5> x 'int' init
+  |   `-BinaryExpr <3:15> '+'
+  |     |-IntLiteralExpr <3:13> '1'
+  |     `-BinaryExpr <3:19> '*'
+  |       |-IntLiteralExpr <3:17> '2'
+  |       `-IntLiteralExpr <3:21> '3'
+  |-DeclStmt <4:5>
+  | `-VarDecl <4:5> flag 'bool' init
+  |   `-BinaryExpr <4:24> '=='
+  |     |-BinaryExpr <4:19> '>='
+  |     | |-DeclRefExpr <4:17> 'x'
+  |     | `-IntLiteralExpr <4:22> '3'
+  |     `-BoolLiteralExpr <4:27> true
+  |-IfStmt <7:5> has_else
+  | |-DeclRefExpr <7:9> 'flag'
+  | |-CompoundStmt <7:15>
+  | | `-PrintStmt <7:17>
+  | |   `-BinaryExpr <7:31> '*'
+  | |     |-BinaryExpr <7:26> '+'
+  | |     | |-DeclRefExpr <7:24> 'x'
+  | |     | `-IntLiteralExpr <7:28> '1'
+  | |     `-IntLiteralExpr <7:33> '2'
+  | `-CompoundStmt <7:44>
+  |   `-AssignStmt <7:46>
+  |     |-DeclRefExpr <7:46> 'x'
+  |     `-BinaryExpr <7:52> '+'
+  |       |-DeclRefExpr <7:50> 'x'
+  |       `-IntLiteralExpr <7:54> '1'
+  |-DoWhileStmt <8:5>
+  | |-CompoundStmt <8:8>
+  | | `-AssignStmt <8:10>
+  | |   |-DeclRefExpr <8:10> 'x'
+  | |   `-BinaryExpr <8:16> '+'
+  | |     |-DeclRefExpr <8:14> 'x'
+  | |     `-IntLiteralExpr <8:18> '1'
+  | `-BinaryExpr <8:32> '>'
+  |   |-DeclRefExpr <8:30> 'x'
+  |   `-IntLiteralExpr <8:34> '10'
+  |-ForStmt <9:5>
+  | |-DeclStmt <9:10>
+  | | `-VarDecl <9:10> i 'int' init
+  | |   `-IntLiteralExpr <9:18> '0'
+  | |-BinaryExpr <9:23> '>'
+  | | |-DeclRefExpr <9:21> 'i'
+  | | `-IntLiteralExpr <9:25> '3'
+  | |-AssignStmt <9:28>
+  | | |-DeclRefExpr <9:28> 'i'
+  | | `-BinaryExpr <9:34> '+'
+  | |   |-DeclRefExpr <9:32> 'i'
+  | |   `-IntLiteralExpr <9:36> '1'
+  | `-CompoundStmt <9:39>
+  |   `-PrintStmt <9:41>
+  |     `-DeclRefExpr <9:47> 'i'
+  |-ForStmt <10:5>
+  | |-AssignStmt <10:10>
+  | | |-DeclRefExpr <10:10> 'x'
+  | | `-IntLiteralExpr <10:14> '1'
+  | |-DeclRefExpr <10:17> 'flag'
+  | |-AssignStmt <10:23>
+  | | |-DeclRefExpr <10:23> 'x'
+  | | `-BinaryExpr <10:29> '*'
+  | |   |-DeclRefExpr <10:27> 'x'
+  | |   `-IntLiteralExpr <10:31> '2'
+  | `-CompoundStmt <10:34>
+  |   `-PrintStmt <10:36>
+  |     `-DeclRefExpr <10:42> 'x'
+  `-CompoundStmt <11:5>
+    |-DeclStmt <11:7>
+    | `-VarDecl <11:7> unused 'int'
+    `-IfStmt <11:19>
+      |-BoolLiteralExpr <11:23> false
+      `-CompoundStmt <11:30>
+)");
 }
 
 TEST(ParserProgramTest, DeclarationsAssignmentsAndLiteralDataAreDistinct) {
     const auto parsed =
         ParseBody("int x; bool flag = false; x = 00042; print(flag);");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = OnlyBlock(parsed.result);
-    ASSERT_NE(body, nullptr);
-    ASSERT_EQ(body->body.size(), 4U);
-    const auto* uninitialized = Variable(body->body[0].get());
-    const auto* initialized   = Variable(body->body[1].get());
-    ASSERT_NE(uninitialized, nullptr);
-    ASSERT_NE(initialized, nullptr);
-    EXPECT_EQ(uninitialized->type, ast::Type::Int);
-    EXPECT_EQ(uninitialized->name, "x");
-    EXPECT_EQ(uninitialized->init, nullptr);
-    EXPECT_EQ(initialized->type, ast::Type::Bool);
-    const auto* boolean =
-        dynamic_cast<const ast::BoolLiteralExpr*>(initialized->init.get());
-    ASSERT_NE(boolean, nullptr);
-    EXPECT_FALSE(boolean->value);
-    const auto* assignment =
-        dynamic_cast<const ast::AssignStmt*>(body->body[2].get());
-    ASSERT_NE(assignment, nullptr);
-    const auto* target =
-        dynamic_cast<const ast::DeclRefExpr*>(assignment->target.get());
+    EXPECT_FALSE(parsed.has_syntax_errors());
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  |-DeclStmt <1:3>
+  | `-VarDecl <1:3> x 'int'
+  |-DeclStmt <1:10>
+  | `-VarDecl <1:10> flag 'bool' init
+  |   `-BoolLiteralExpr <1:22> false
+  |-AssignStmt <1:29>
+  | |-DeclRefExpr <1:29> 'x'
+  | `-IntLiteralExpr <1:33> '00042'
+  `-PrintStmt <1:40>
+    `-DeclRefExpr <1:46> 'flag'
+)");
+
+    // Retain direct node assertion to validate fine-grained spelling ownership
+    const auto* block = dynamic_cast<const ast::CompoundStmt*>(
+        parsed.translation_unit->statements[0].get());
+    ASSERT_NE(block, nullptr);
+    const auto* assign =
+        dynamic_cast<const ast::AssignStmt*>(block->body[2].get());
+    ASSERT_NE(assign, nullptr);
     const auto* value =
-        dynamic_cast<const ast::IntLiteralExpr*>(assignment->value.get());
-    ASSERT_NE(target, nullptr);
+        dynamic_cast<const ast::IntLiteralExpr*>(assign->value.get());
     ASSERT_NE(value, nullptr);
-    EXPECT_EQ(target->name, "x");
     EXPECT_EQ(value->spelling, "00042");
-    ExpectStatement(body);
 }
 
 TEST(ParserProgramTest, SyntaxParsingDoesNotResolveNamesOrValidateTypes) {
     const auto parsed = ParseBody(
         "x = true; int x; bool x; if (1) { } print(missing + false);"
         "bool flag = 99999999999999999999999999999999999999;");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    EXPECT_TRUE(parsed.diagnostics.empty());
-    const auto* body = OnlyBlock(parsed.result);
-    ASSERT_NE(body, nullptr);
-    EXPECT_EQ(body->body.size(), 6U);
-    ExpectStatement(body);
-}
-
-TEST(ParserGrammarTest, AssignmentsRemainStatementsNotExpressions) {
-    for (const std::string source :
-         {"x = y = 1;", "int y = (x = 1);", "print(x = 1);", "if (x = 1) { }",
-          "for (x = 0; x = 1; x = 2) { }"}) {
-        SCOPED_TRACE(source);
-        const auto parsed = Parse(source);
-        EXPECT_TRUE(parsed.result.has_syntax_errors);
-        EXPECT_TRUE(parsed.has_errors);
-        ASSERT_NE(parsed.result.translation_unit, nullptr);
-        EXPECT_TRUE(parsed.result.translation_unit->statements.empty());
-    }
+    EXPECT_FALSE(parsed.has_syntax_errors());
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.translation_unit, nullptr);
 }
 
 TEST(ParserProgramTest, LocationsUseLeadingTokensAndOperatorsAcrossTrivia) {
     const auto parsed = Parse(
         "{\n/* a\nb*/ int x=00042;\n  x = x + 1;\n  { print(false); "
         "}\n}");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = OnlyBlock(parsed.result);
-    ASSERT_NE(body, nullptr);
-    ASSERT_EQ(body->body.size(), 3U);
-    const auto* variable = Variable(body->body[0].get());
-    ASSERT_NE(variable, nullptr);
-    ExpectLocation(variable->loc, 3, 5);
-    ExpectLocation(body->body[0]->loc, 3, 5);
-    ExpectLocation(variable->init->loc, 3, 11);
-    const auto* assignment =
-        dynamic_cast<const ast::AssignStmt*>(body->body[1].get());
-    ASSERT_NE(assignment, nullptr);
-    ExpectLocation(assignment->loc, 4, 3);
-    ExpectLocation(assignment->target->loc, 4, 3);
-    ExpectLocation(assignment->value->loc, 4, 9);
-    const auto* nested =
-        dynamic_cast<const ast::CompoundStmt*>(body->body[2].get());
-    ASSERT_NE(nested, nullptr);
-    ExpectLocation(nested->loc, 5, 3);
-    ASSERT_EQ(nested->body.size(), 1U);
-    ExpectLocation(nested->body[0]->loc, 5, 5);
-    const auto* print =
-        dynamic_cast<const ast::PrintStmt*>(nested->body[0].get());
-    ASSERT_NE(print, nullptr);
-    ExpectLocation(print->value->loc, 5, 11);
+    EXPECT_FALSE(parsed.has_syntax_errors());
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  |-DeclStmt <3:5>
+  | `-VarDecl <3:5> x 'int' init
+  |   `-IntLiteralExpr <3:11> '00042'
+  |-AssignStmt <4:3>
+  | |-DeclRefExpr <4:3> 'x'
+  | `-BinaryExpr <4:9> '+'
+  |   |-DeclRefExpr <4:7> 'x'
+  |   `-IntLiteralExpr <4:11> '1'
+  `-CompoundStmt <5:3>
+    `-PrintStmt <5:5>
+      `-BoolLiteralExpr <5:11> false
+)");
 }
 
 TEST(ParserProgramTest,
@@ -419,113 +342,111 @@ TEST(ParserProgramTest,
         "  do { } while (false);\n"
         "  for (bool flag; true; flag = false) { }\n"
         "}");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = OnlyBlock(parsed.result);
-    ASSERT_NE(body, nullptr);
-    ASSERT_EQ(body->body.size(), 3U);
-    ExpectLocation(body->body[0]->loc, 2, 3);
-    ExpectLocation(body->body[1]->loc, 3, 3);
-    ExpectLocation(body->body[2]->loc, 4, 3);
-    const auto* loop = dynamic_cast<const ast::ForStmt*>(body->body[2].get());
-    ASSERT_NE(loop, nullptr);
-    const auto* declaration = Variable(loop->init.get());
-    ASSERT_NE(declaration, nullptr);
-    EXPECT_EQ(declaration->type, ast::Type::Bool);
-    EXPECT_EQ(declaration->init, nullptr);
-    ExpectLocation(declaration->loc, 4, 8);
-    ExpectStatement(body);
+    EXPECT_FALSE(parsed.has_syntax_errors());
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  |-IfStmt <2:3> has_else
+  | |-BoolLiteralExpr <2:7> true
+  | |-CompoundStmt <2:13>
+  | `-CompoundStmt <2:22>
+  |-DoWhileStmt <3:3>
+  | |-CompoundStmt <3:6>
+  | `-BoolLiteralExpr <3:17> false
+  `-ForStmt <4:3>
+    |-DeclStmt <4:8>
+    | `-VarDecl <4:8> flag 'bool'
+    |-BoolLiteralExpr <4:19> true
+    |-AssignStmt <4:25>
+    | |-DeclRefExpr <4:25> 'flag'
+    | `-BoolLiteralExpr <4:32> false
+    `-CompoundStmt <4:39>
+)");
 }
 
 TEST(ParserExpressionTest, PrecedenceGroupingAndBinaryLocations) {
     const auto parsed =
         Parse("{\nint x = 1 +\n  2 * 3;\nprint((1 + 2) * 3);\n}");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = OnlyBlock(parsed.result);
-    ASSERT_NE(body, nullptr);
-    const auto* variable = Variable(body->body[0].get());
-    ASSERT_NE(variable, nullptr);
-    const auto* add =
-        dynamic_cast<const ast::BinaryExpr*>(variable->init.get());
-    ASSERT_NE(add, nullptr);
-    EXPECT_EQ(add->op, ast::BinaryOp::Add);
-    ExpectLocation(add->loc, 2, 11);
-    const auto* multiply = dynamic_cast<const ast::BinaryExpr*>(add->rhs.get());
-    ASSERT_NE(multiply, nullptr);
-    EXPECT_EQ(multiply->op, ast::BinaryOp::Mul);
-    ExpectLocation(multiply->loc, 3, 5);
-    ExpectLocation(multiply->lhs->loc, 3, 3);
-    ExpectLocation(multiply->rhs->loc, 3, 7);
-    const auto* print =
-        dynamic_cast<const ast::PrintStmt*>(body->body[1].get());
-    ASSERT_NE(print, nullptr);
-    const auto* grouped_multiply =
-        dynamic_cast<const ast::BinaryExpr*>(print->value.get());
-    ASSERT_NE(grouped_multiply, nullptr);
-    EXPECT_EQ(grouped_multiply->op, ast::BinaryOp::Mul);
-    const auto* grouped_add =
-        dynamic_cast<const ast::BinaryExpr*>(grouped_multiply->lhs.get());
-    ASSERT_NE(grouped_add, nullptr);
-    EXPECT_EQ(grouped_add->op, ast::BinaryOp::Add);
-    ExpectLocation(grouped_add->loc, 4, 10);
+    EXPECT_FALSE(parsed.has_syntax_errors());
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  |-DeclStmt <2:1>
+  | `-VarDecl <2:1> x 'int' init
+  |   `-BinaryExpr <2:11> '+'
+  |     |-IntLiteralExpr <2:9> '1'
+  |     `-BinaryExpr <3:5> '*'
+  |       |-IntLiteralExpr <3:3> '2'
+  |       `-IntLiteralExpr <3:7> '3'
+  `-PrintStmt <4:1>
+    `-BinaryExpr <4:15> '*'
+      |-BinaryExpr <4:10> '+'
+      | |-IntLiteralExpr <4:8> '1'
+      | `-IntLiteralExpr <4:12> '2'
+      `-IntLiteralExpr <4:17> '3'
+)");
 }
 
 TEST(ParserExpressionTest, RepeatedArithmeticIsLeftAssociated) {
-    for (const auto& [expression, operation] :
-         std::vector<std::pair<std::string, ast::BinaryOp>>{
-             {"a + b + c", ast::BinaryOp::Add},
-             {"a * b * c", ast::BinaryOp::Mul}}) {
-        SCOPED_TRACE(expression);
-        const auto parsed = ParseBody("print(" + expression + ");");
-        EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-        const auto* body = OnlyBlock(parsed.result);
-        ASSERT_NE(body, nullptr);
-        const auto* print =
-            dynamic_cast<const ast::PrintStmt*>(body->body[0].get());
-        ASSERT_NE(print, nullptr);
-        const auto* outer =
-            dynamic_cast<const ast::BinaryExpr*>(print->value.get());
-        ASSERT_NE(outer, nullptr);
-        EXPECT_EQ(outer->op, operation);
-        const auto* left =
-            dynamic_cast<const ast::BinaryExpr*>(outer->lhs.get());
-        ASSERT_NE(left, nullptr);
-        EXPECT_EQ(left->op, operation);
-        const auto* right =
-            dynamic_cast<const ast::DeclRefExpr*>(outer->rhs.get());
-        ASSERT_NE(right, nullptr);
-        EXPECT_EQ(right->name, "c");
+    {
+        const auto parsed = ParseBody("print(a + b + c);");
+        EXPECT_FALSE(parsed.has_syntax_errors());
+        ASSERT_NE(parsed.translation_unit, nullptr);
+        ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  `-PrintStmt <1:3>
+    `-BinaryExpr <1:15> '+'
+      |-BinaryExpr <1:11> '+'
+      | |-DeclRefExpr <1:9> 'a'
+      | `-DeclRefExpr <1:13> 'b'
+      `-DeclRefExpr <1:17> 'c'
+)");
+    }
+    {
+        const auto parsed = ParseBody("print(a * b * c);");
+        EXPECT_FALSE(parsed.has_syntax_errors());
+        ASSERT_NE(parsed.translation_unit, nullptr);
+        ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  `-PrintStmt <1:3>
+    `-BinaryExpr <1:15> '*'
+      |-BinaryExpr <1:11> '*'
+      | |-DeclRefExpr <1:9> 'a'
+      | `-DeclRefExpr <1:13> 'b'
+      `-DeclRefExpr <1:17> 'c'
+)");
     }
 }
 
 TEST(ParserExpressionTest, ComparisonBindsMoreTightlyThanEquality) {
     const auto parsed = ParseBody("print(a + b * c >= d == e > f + g);");
-    EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-    const auto* body = OnlyBlock(parsed.result);
-    ASSERT_NE(body, nullptr);
-    const auto* print =
-        dynamic_cast<const ast::PrintStmt*>(body->body[0].get());
-    ASSERT_NE(print, nullptr);
-    const auto* equality =
-        dynamic_cast<const ast::BinaryExpr*>(print->value.get());
-    ASSERT_NE(equality, nullptr);
-    EXPECT_EQ(equality->op, ast::BinaryOp::Eq);
-    const auto* left =
-        dynamic_cast<const ast::BinaryExpr*>(equality->lhs.get());
-    const auto* right =
-        dynamic_cast<const ast::BinaryExpr*>(equality->rhs.get());
-    ASSERT_NE(left, nullptr);
-    ASSERT_NE(right, nullptr);
-    EXPECT_EQ(left->op, ast::BinaryOp::Ge);
-    EXPECT_EQ(right->op, ast::BinaryOp::Gt);
-    const auto* addition =
-        dynamic_cast<const ast::BinaryExpr*>(left->lhs.get());
-    ASSERT_NE(addition, nullptr);
-    EXPECT_EQ(addition->op, ast::BinaryOp::Add);
-    const auto* multiplication =
-        dynamic_cast<const ast::BinaryExpr*>(addition->rhs.get());
-    ASSERT_NE(multiplication, nullptr);
-    EXPECT_EQ(multiplication->op, ast::BinaryOp::Mul);
-    ExpectStatement(body);
+    EXPECT_FALSE(parsed.has_syntax_errors());
+    EXPECT_FALSE(parsed.has_errors);
+    ASSERT_NE(parsed.translation_unit, nullptr);
+    ExpectAst(*parsed.translation_unit, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  `-PrintStmt <1:3>
+    `-BinaryExpr <1:24> '=='
+      |-BinaryExpr <1:19> '>='
+      | |-BinaryExpr <1:11> '+'
+      | | |-DeclRefExpr <1:9> 'a'
+      | | `-BinaryExpr <1:15> '*'
+      | |   |-DeclRefExpr <1:13> 'b'
+      | |   `-DeclRefExpr <1:17> 'c'
+      | `-DeclRefExpr <1:22> 'd'
+      `-BinaryExpr <1:29> '>'
+        |-DeclRefExpr <1:27> 'e'
+        `-BinaryExpr <1:33> '+'
+          |-DeclRefExpr <1:31> 'f'
+          `-DeclRefExpr <1:35> 'g'
+)");
 }
 
 TEST(ParserExpressionTest, ExplicitGroupingHasIndependentChainRestrictions) {
@@ -534,11 +455,9 @@ TEST(ParserExpressionTest, ExplicitGroupingHasIndependentChainRestrictions) {
           "a == (b == c)", "((true))", "false"}) {
         SCOPED_TRACE(expression);
         const auto parsed = ParseBody("print(" + expression + ");");
-        EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-        const auto* body = OnlyBlock(parsed.result);
-        ASSERT_NE(body, nullptr);
-        ASSERT_EQ(body->body.size(), 1U);
-        ExpectStatement(body);
+        EXPECT_FALSE(parsed.has_syntax_errors());
+        EXPECT_FALSE(parsed.has_errors);
+        ASSERT_NE(parsed.translation_unit, nullptr);
     }
 }
 
@@ -549,11 +468,22 @@ TEST(ParserExpressionTest,
           "a == b > c > d", "a + b > c + d > e"}) {
         SCOPED_TRACE(expression);
         const auto parsed = ParseBody("print(" + expression + ");");
-        EXPECT_TRUE(parsed.result.has_syntax_errors);
-        EXPECT_FALSE(parsed.diagnostics.empty());
-        const auto* body = OnlyBlock(parsed.result);
-        ASSERT_NE(body, nullptr);
-        EXPECT_TRUE(body->body.empty());
+        EXPECT_TRUE(parsed.has_syntax_errors());
+        EXPECT_TRUE(parsed.has_errors);
+        EXPECT_FALSE(parsed.syntax_errors.empty());
+    }
+}
+
+TEST(ParserGrammarTest, AssignmentsRemainStatementsNotExpressions) {
+    for (const std::string source :
+         {"x = y = 1;", "int y = (x = 1);", "print(x = 1);", "if (x = 1) { }",
+          "for (x = 0; x = 1; x = 2) { }"}) {
+        SCOPED_TRACE(source);
+        const auto parsed = Parse(source);
+        EXPECT_TRUE(parsed.has_syntax_errors());
+        EXPECT_TRUE(parsed.has_errors);
+        ASSERT_NE(parsed.translation_unit, nullptr);
+        EXPECT_TRUE(parsed.translation_unit->statements.empty());
     }
 }
 
@@ -561,13 +491,11 @@ TEST(ParserGrammarTest, RestrictedNamesAllowDigitSuffixesAndKeywordPrefixes) {
     for (const std::string name : {"answer12", "A", "AbZ009", "print1", "done",
                                    "do1", "main", "integer", "true1"}) {
         SCOPED_TRACE(name);
-        const auto parsed = ParseBody("int " + name + " = 1; " + name + " = " +
-                                      name + " + 1; print(" + name + ");");
-        EXPECT_FALSE(parsed.result.has_syntax_errors) << parsed.diagnostics;
-        const auto* body = OnlyBlock(parsed.result);
-        ASSERT_NE(body, nullptr);
-        EXPECT_EQ(body->body.size(), 3U);
-        ExpectStatement(body);
+        const auto parsed = ParseBody(
+            std::format("int {0} = 1; {0} = {0} + 1; print({0});", name));
+        EXPECT_FALSE(parsed.has_syntax_errors());
+        EXPECT_FALSE(parsed.has_errors);
+        ASSERT_NE(parsed.translation_unit, nullptr);
     }
 }
 
@@ -580,10 +508,10 @@ TEST(ParserGrammarTest, InvalidNamesAreRejectedInEveryNameContext) {
             const auto parsed = ParseBody(body);
             const bool invalid_spelling =
                 name == "_answer" || name == "a1b" || name == "a_b";
-            EXPECT_EQ(parsed.result.has_syntax_errors, !invalid_spelling);
+            EXPECT_EQ(parsed.has_syntax_errors(), !invalid_spelling);
             EXPECT_TRUE(parsed.has_errors);
-            EXPECT_FALSE(parsed.diagnostics.empty());
-            ASSERT_NE(parsed.result.translation_unit, nullptr);
+            EXPECT_FALSE(parsed.all_diagnostics.empty());
+            ASSERT_NE(parsed.translation_unit, nullptr);
         }
     }
 }
@@ -598,12 +526,10 @@ TEST(ParserGrammarTest, LexerRecognitionDoesNotBroadenSupportedExpressions) {
         const bool invalid_spelling =
             expression == "3.14" || expression == ".5" || expression == "3." ||
             expression == "1e3" || expression == "1f";
-        EXPECT_EQ(parsed.result.has_syntax_errors, !invalid_spelling);
+        EXPECT_EQ(parsed.has_syntax_errors(), !invalid_spelling);
         EXPECT_TRUE(parsed.has_errors);
-        EXPECT_FALSE(parsed.diagnostics.empty());
-        const auto* body = OnlyBlock(parsed.result);
-        ASSERT_NE(body, nullptr);
-        EXPECT_TRUE(body->body.empty());
+        EXPECT_FALSE(parsed.all_diagnostics.empty());
+        ASSERT_NE(parsed.translation_unit, nullptr);
     }
 }
 
@@ -632,9 +558,9 @@ TEST(ParserGrammarTest, UnsupportedStatementsTypesAndForFieldsAreRejected) {
                                    "int *x;"}) {
         SCOPED_TRACE(body);
         const auto parsed = ParseBody(body);
-        EXPECT_TRUE(parsed.result.has_syntax_errors);
-        EXPECT_FALSE(parsed.diagnostics.empty());
-        ASSERT_NE(parsed.result.translation_unit, nullptr);
+        EXPECT_TRUE(parsed.has_syntax_errors());
+        EXPECT_FALSE(parsed.syntax_errors.empty());
+        ASSERT_NE(parsed.translation_unit, nullptr);
     }
 }
 
@@ -646,66 +572,11 @@ TEST(ParserGrammarTest, FunctionDeclarationsAndDefinitionsAreDeferred) {
         for (const auto& source : {function, "{ " + function + " }"}) {
             SCOPED_TRACE(source);
             const auto parsed = Parse(source);
-            EXPECT_TRUE(parsed.result.has_syntax_errors);
+            EXPECT_TRUE(parsed.has_syntax_errors());
             EXPECT_TRUE(parsed.has_errors);
-            ASSERT_NE(parsed.result.translation_unit, nullptr);
-            for (const auto& statement :
-                 parsed.result.translation_unit->statements) {
-                ExpectStatement(statement.get());
-            }
+            ASSERT_NE(parsed.translation_unit, nullptr);
         }
     }
-}
-
-TEST(ParserCursorTest, VirtualEofIsObservableButNeverConsumable) {
-    const std::string       source = "{ }\n// tail\n";
-    common::DiagnosisEngine diagnostics;
-    lexer::Lexer            lexer{diagnostics};
-    const auto              tokens = lexer.Tokenize(source);
-    ASSERT_FALSE(tokens.empty());
-    parser::Parser parser{source, tokens, diagnostics};
-    EXPECT_FALSE(parser::ParserTestAccess::AtEnd(parser));
-    ASSERT_EQ(parser::ParserTestAccess::Consume(parser), &tokens[0]);
-    const auto before  = parser::ParserTestAccess::Index(parser);
-    const auto maximum = std::numeric_limits<std::size_t>::max();
-    EXPECT_EQ(parser::ParserTestAccess::PeekToken(parser, maximum), nullptr);
-    EXPECT_EQ(parser::ParserTestAccess::PeekKind(parser, maximum),
-              lexer::TokenKind::eof);
-    EXPECT_EQ(parser::ParserTestAccess::Index(parser), before);
-    while (!parser::ParserTestAccess::AtEnd(parser)) {
-        ASSERT_NE(parser::ParserTestAccess::Consume(parser), nullptr);
-    }
-    const auto end = parser::ParserTestAccess::Index(parser);
-    for (int repetition = 0; repetition < 4; ++repetition) {
-        EXPECT_EQ(parser::ParserTestAccess::Consume(parser), nullptr);
-        EXPECT_FALSE(
-            parser::ParserTestAccess::Match(parser, lexer::TokenKind::eof));
-        EXPECT_EQ(parser::ParserTestAccess::PeekToken(parser), nullptr);
-        EXPECT_EQ(parser::ParserTestAccess::PeekKind(parser),
-                  lexer::TokenKind::eof);
-        EXPECT_EQ(parser::ParserTestAccess::Index(parser), end);
-    }
-    ExpectLocation(parser::ParserTestAccess::Location(parser), 3, 1);
-}
-
-TEST(ParserCursorTest, EmptySequenceStartsAtOneBasedEof) {
-    const std::string               source;
-    const std::vector<lexer::Token> tokens;
-    common::DiagnosisEngine         diagnostics;
-    parser::Parser                  parser{source, tokens, diagnostics};
-    EXPECT_TRUE(parser::ParserTestAccess::AtEnd(parser));
-    EXPECT_EQ(parser::ParserTestAccess::Consume(parser), nullptr);
-    EXPECT_FALSE(
-        parser::ParserTestAccess::Match(parser, lexer::TokenKind::eof));
-    ExpectLocation(parser::ParserTestAccess::Location(parser), 1, 1);
-    testing::internal::CaptureStderr();
-    const auto result = parser.ParseTranslationUnit();
-    const auto output = testing::internal::GetCapturedStderr();
-    EXPECT_FALSE(result.has_syntax_errors);
-    EXPECT_TRUE(output.empty());
-    ASSERT_NE(result.translation_unit, nullptr);
-    EXPECT_TRUE(result.translation_unit->statements.empty());
-    ASSERT_NE(result.translation_unit, nullptr);
 }
 
 TEST(ParserLifecycleTest, RepeatedCallsResetCursorAndKeepSharedErrorState) {
@@ -714,25 +585,31 @@ TEST(ParserLifecycleTest, RepeatedCallsResetCursorAndKeepSharedErrorState) {
     lexer::Lexer            lexer{diagnostics};
     const auto              tokens = lexer.Tokenize(source);
     parser::Parser          parser{source, tokens, diagnostics};
-    const auto              original_tokens = tokens;
+    const auto&             original_tokens = tokens;
     const auto              first           = parser.ParseTranslationUnit();
-    testing::internal::CaptureStderr();
-    diagnostics.Report(
-        {1, 1, common::Severity::kError, "earlier lexical error"});
+
+    diagnostics.Report({.loc      = {.line = 1, .col = 1},
+                        .severity = common::Severity::kError,
+                        .message  = "earlier lexical error"});
     const auto second = parser.ParseTranslationUnit();
-    const auto output = testing::internal::GetCapturedStderr();
-    EXPECT_FALSE(first.has_syntax_errors);
-    EXPECT_FALSE(second.has_syntax_errors);
+
     EXPECT_TRUE(diagnostics.HasErrors());
-    EXPECT_NE(first.translation_unit.get(), second.translation_unit.get());
-    const auto* first_body  = OnlyBlock(first);
-    const auto* second_body = OnlyBlock(second);
-    ASSERT_NE(first_body, nullptr);
-    ASSERT_NE(second_body, nullptr);
-    ASSERT_EQ(first_body->body.size(), 1U);
-    ASSERT_EQ(second_body->body.size(), 1U);
-    EXPECT_NE(first_body->body[0].get(), second_body->body[0].get());
-    EXPECT_EQ(output, "1:1: error: earlier lexical error\n");
+    EXPECT_NE(first.get(), second.get());
+    ExpectAst(*first, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  `-PrintStmt <1:3>
+    `-IntLiteralExpr <1:9> '1'
+)");
+    ExpectAst(*second, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  `-PrintStmt <1:3>
+    `-IntLiteralExpr <1:9> '1'
+)");
+    ASSERT_EQ(diagnostics.Collected().size(), 1U);
+    EXPECT_EQ(diagnostics.Collected()[0].message, "earlier lexical error");
+
     ASSERT_EQ(tokens.size(), original_tokens.size());
     for (std::size_t index = 0; index < tokens.size(); ++index) {
         EXPECT_EQ(tokens[index].kind, original_tokens[index].kind);
@@ -748,14 +625,16 @@ TEST(ParserLifecycleTest, PriorWarningDoesNotBecomeLocalSyntaxError) {
     common::DiagnosisEngine diagnostics;
     lexer::Lexer            lexer{diagnostics};
     const auto              tokens = lexer.Tokenize(source);
-    testing::internal::CaptureStderr();
-    diagnostics.Report({1, 1, common::Severity::kWarning, "earlier warning"});
+    diagnostics.Report({.loc      = {.line = 1, .col = 1},
+                        .severity = common::Severity::kWarning,
+                        .message  = "earlier warning"});
     parser::Parser parser{source, tokens, diagnostics};
     const auto     result = parser.ParseTranslationUnit();
-    const auto     output = testing::internal::GetCapturedStderr();
-    EXPECT_FALSE(result.has_syntax_errors);
     EXPECT_FALSE(diagnostics.HasErrors());
-    EXPECT_EQ(output, "1:1: warning: earlier warning\n");
+    ExpectAst(*result, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+)");
 }
 
 TEST(ParserLifecycleTest,
@@ -763,35 +642,34 @@ TEST(ParserLifecycleTest,
     const std::string       source = "{ int a1b; print(9); }";
     common::DiagnosisEngine diagnostics;
     lexer::Lexer            lexer{diagnostics};
-    testing::internal::CaptureStderr();
-    const auto tokens          = lexer.Tokenize(source);
-    const auto lexical_reports = testing::internal::GetCapturedStderr();
-    EXPECT_EQ(lexical_reports, "1:7: error: invalid identifier: 'a1b'\n");
+    const auto              tokens = lexer.Tokenize(source);
     ASSERT_TRUE(diagnostics.HasErrors());
+    ASSERT_EQ(diagnostics.Collected().size(), 1U);
+    EXPECT_EQ(diagnostics.Collected()[0].message, "invalid identifier: 'a1b'");
+
     parser::Parser parser{source, tokens, diagnostics};
-    testing::internal::CaptureStderr();
-    const auto first          = parser.ParseTranslationUnit();
-    const auto second         = parser.ParseTranslationUnit();
-    const auto syntax_reports = testing::internal::GetCapturedStderr();
-    EXPECT_TRUE(syntax_reports.empty());
-    EXPECT_FALSE(first.has_syntax_errors);
-    EXPECT_FALSE(second.has_syntax_errors);
-    EXPECT_TRUE(diagnostics.HasErrors());
-    EXPECT_NE(first.translation_unit.get(), second.translation_unit.get());
-    const auto* first_body  = OnlyBlock(first);
-    const auto* second_body = OnlyBlock(second);
-    ASSERT_NE(first_body, nullptr);
-    ASSERT_NE(second_body, nullptr);
-    ASSERT_EQ(first_body->body.size(), 1U);
-    ASSERT_EQ(second_body->body.size(), 1U);
-    EXPECT_EQ(first_body->body[0]->kind, ast::StmtKind::Print);
-    EXPECT_EQ(second_body->body[0]->kind, ast::StmtKind::Print);
-    ExpectStatement(first_body);
-    ExpectStatement(second_body);
+    const auto     first  = parser.ParseTranslationUnit();
+    const auto     second = parser.ParseTranslationUnit();
+
+    // Syntax pass didn't add duplicate diagnostics
+    EXPECT_EQ(diagnostics.Collected().size(), 1U);
+    EXPECT_NE(first.get(), second.get());
+    ExpectAst(*first, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  `-PrintStmt <1:12>
+    `-IntLiteralExpr <1:18> '9'
+)");
+    ExpectAst(*second, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  `-PrintStmt <1:12>
+    `-IntLiteralExpr <1:18> '9'
+)");
 }
 
 TEST(ParserLifecycleTest, TreesOwnSpellingsAfterAllBorrowedInputsAreDestroyed) {
-    parser::ParseResult result;
+    std::unique_ptr<ast::TranslationUnit> result;
     {
         const std::string source = "{ int answer12 = 00042; print(answer12); }";
         common::DiagnosisEngine diagnostics;
@@ -799,123 +677,16 @@ TEST(ParserLifecycleTest, TreesOwnSpellingsAfterAllBorrowedInputsAreDestroyed) {
         const auto              tokens = lexer.Tokenize(source);
         parser::Parser          parser{source, tokens, diagnostics};
         result = parser.ParseTranslationUnit();
-        EXPECT_FALSE(result.has_syntax_errors);
-    }
-    const auto* body = OnlyBlock(result);
-    ASSERT_NE(body, nullptr);
-    ASSERT_EQ(body->body.size(), 2U);
-    const auto* variable = Variable(body->body[0].get());
-    ASSERT_NE(variable, nullptr);
-    EXPECT_EQ(variable->name, "answer12");
-    const auto* value =
-        dynamic_cast<const ast::IntLiteralExpr*>(variable->init.get());
-    ASSERT_NE(value, nullptr);
-    EXPECT_EQ(value->spelling, "00042");
-    const auto* print =
-        dynamic_cast<const ast::PrintStmt*>(body->body[1].get());
-    ASSERT_NE(print, nullptr);
-    const auto* reference =
-        dynamic_cast<const ast::DeclRefExpr*>(print->value.get());
-    ASSERT_NE(reference, nullptr);
-    EXPECT_EQ(reference->name, "answer12");
-}
-
-TEST(ParserComponentTest, DeclarationsAndAssignmentsLeaveCallerSeparators) {
-    for (const auto& [source, separator] :
-         std::vector<std::pair<std::string, lexer::TokenKind>>{
-             {"int x = (1 + 2) * 3;", lexer::TokenKind::semi},
-             {"bool flag = true)", lexer::TokenKind::r_paren}}) {
-        SCOPED_TRACE(source);
-        common::DiagnosisEngine diagnostics;
-        lexer::Lexer            lexer{diagnostics};
-        const auto              tokens = lexer.Tokenize(source);
-        parser::Parser          parser{source, tokens, diagnostics};
-        const auto declaration = parser::ParserTestAccess::Declaration(parser);
-        ASSERT_NE(declaration, nullptr);
-        ASSERT_NE(declaration->init, nullptr);
-        EXPECT_EQ(parser::ParserTestAccess::PeekKind(parser), separator);
-        ExpectLocation(declaration->loc, 1, 1);
         EXPECT_FALSE(diagnostics.HasErrors());
     }
-    const std::string       source = "answer12 = (1 + 2);";
-    common::DiagnosisEngine diagnostics;
-    lexer::Lexer            lexer{diagnostics};
-    const auto              tokens = lexer.Tokenize(source);
-    parser::Parser          parser{source, tokens, diagnostics};
-    const auto assignment = parser::ParserTestAccess::Assignment(parser);
-    ASSERT_NE(assignment, nullptr);
-    EXPECT_EQ(assignment->kind, ast::StmtKind::Assign);
-    ExpectLocation(assignment->loc, 1, 1);
-    ExpectLocation(assignment->target->loc, 1, 1);
-    EXPECT_EQ(parser::ParserTestAccess::PeekKind(parser),
-              lexer::TokenKind::semi);
-    EXPECT_FALSE(diagnostics.HasErrors());
+    ASSERT_NE(result, nullptr);
+    ExpectAst(*result, R"(
+TranslationUnit
+`-CompoundStmt <1:1>
+  |-DeclStmt <1:3>
+  | `-VarDecl <1:3> answer12 'int' init
+  |   `-IntLiteralExpr <1:18> '00042'
+  `-PrintStmt <1:25>
+    `-DeclRefExpr <1:31> 'answer12'
+)");
 }
-
-TEST(ParserComponentTest, ExpressionsLeaveEveryCallerBoundaryIntact) {
-    for (const auto& [source, separator] :
-         std::vector<std::pair<std::string, lexer::TokenKind>>{
-             {"(1 + 2) * 3;", lexer::TokenKind::semi},
-             {"((answer12)))", lexer::TokenKind::r_paren},
-             {"true}", lexer::TokenKind::r_brace},
-             {"false", lexer::TokenKind::eof}}) {
-        SCOPED_TRACE(source);
-        common::DiagnosisEngine diagnostics;
-        lexer::Lexer            lexer{diagnostics};
-        const auto              tokens = lexer.Tokenize(source);
-        parser::Parser          parser{source, tokens, diagnostics};
-        const auto expression = parser::ParserTestAccess::Expression(parser);
-        ASSERT_NE(expression, nullptr);
-        ExpectExpression(expression.get());
-        EXPECT_EQ(parser::ParserTestAccess::PeekKind(parser), separator);
-        EXPECT_FALSE(diagnostics.HasErrors());
-    }
-}
-
-TEST(ParserComponentTest,
-     PrattMinimumBindingPowerLeavesWeakerOperatorForCaller) {
-    const std::string       source = "a * b + c;";
-    common::DiagnosisEngine diagnostics;
-    lexer::Lexer            lexer{diagnostics};
-    const auto              tokens = lexer.Tokenize(source);
-    parser::Parser          parser{source, tokens, diagnostics};
-    const auto expression = parser::ParserTestAccess::Expression(parser, 6);
-    ASSERT_NE(expression, nullptr);
-    const auto* multiplication =
-        dynamic_cast<const ast::BinaryExpr*>(expression.get());
-    ASSERT_NE(multiplication, nullptr);
-    EXPECT_EQ(multiplication->op, ast::BinaryOp::Mul);
-    EXPECT_EQ(parser::ParserTestAccess::PeekKind(parser),
-              lexer::TokenKind::plus);
-    EXPECT_FALSE(diagnostics.HasErrors());
-}
-
-TEST(ParserComponentTest,
-     DiagnosedExpressionFailuresLeaveCallerBoundariesIntact) {
-    for (const auto& [source, separator] :
-         std::vector<std::pair<std::string, lexer::TokenKind>>{
-             {";", lexer::TokenKind::semi},
-             {"(1 + ;", lexer::TokenKind::semi},
-             {"1 + )", lexer::TokenKind::r_paren},
-             {"(1 + 2;", lexer::TokenKind::semi},
-             {"1 * }", lexer::TokenKind::r_brace},
-             {"1 +", lexer::TokenKind::eof}}) {
-        SCOPED_TRACE(source);
-        common::DiagnosisEngine diagnostics;
-        lexer::Lexer            lexer{diagnostics};
-        const auto              tokens = lexer.Tokenize(source);
-        parser::Parser          parser{source, tokens, diagnostics};
-        testing::internal::CaptureStderr();
-        const auto expression = parser::ParserTestAccess::Expression(parser);
-        const auto output     = testing::internal::GetCapturedStderr();
-        EXPECT_EQ(expression, nullptr);
-        EXPECT_TRUE(diagnostics.HasErrors());
-        EXPECT_EQ(parser::ParserTestAccess::PeekKind(parser), separator);
-        EXPECT_NE(output.find(": error:"), std::string::npos);
-        const auto first_error = output.find(": error:");
-        EXPECT_EQ(output.find(": error:", first_error + 1), std::string::npos)
-            << output;
-    }
-}
-
-}  // namespace

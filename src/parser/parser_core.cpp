@@ -9,7 +9,7 @@ namespace parser {
 
 Parser::Parser(std::string_view source, std::span<const Token> tokens,
                common::DiagnosisEngine& diagnostics)
-    : cursor_{source, tokens, diagnostics}, expr_parser_{cursor_, *this} {}
+    : cursor_{source, tokens, diagnostics}, expr_parser_{cursor_} {}
 
 std::unique_ptr<ast::TranslationUnit> Parser::ParseTranslationUnit() {
     cursor_.Reset();

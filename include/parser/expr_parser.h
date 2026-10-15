@@ -10,8 +10,7 @@ class Parser;
 // Pratt-based expression parser, holds mutual reference against `Parser`.
 class ExprParser final {
 public:
-    explicit ExprParser(Cursor& stream, Parser& parent)
-        : cursor_{stream}, parent_{parent} {}
+    explicit ExprParser(Cursor& stream) : cursor_{stream} {}
 
     // Consumes parentheses opened within expressions, but leave caller-owned
     // ';', ')', '}' and EOF untouched. Success returns a complete non-null
@@ -27,7 +26,6 @@ public:
 
 private:
     Cursor& cursor_;
-    Parser& parent_;
 };
 
 }  // namespace parser

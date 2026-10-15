@@ -3,7 +3,6 @@
 #include <gtest/gtest.h>
 
 #include "lexer/lexer.h"
-#include "parser/parser.h"
 
 TEST(ExprParserTest, ExpressionsLeaveEveryCallerBoundaryIntact) {
     for (const auto& [source, separator] :
@@ -18,8 +17,7 @@ TEST(ExprParserTest, ExpressionsLeaveEveryCallerBoundaryIntact) {
         const auto              tokens = lexer.Tokenize(source);
 
         parser::Cursor     cursor{source, tokens, diagnostics};
-        parser::Parser     parser{source, tokens, diagnostics};
-        parser::ExprParser expr_parser{cursor, parser};
+        parser::ExprParser expr_parser{cursor};
 
         const auto expression = expr_parser.ParseExpression();
         ASSERT_NE(expression, nullptr);
@@ -35,8 +33,7 @@ TEST(ExprParserTest, PrattMinimumBindingPowerLeavesWeakerOperatorForCaller) {
     const auto              tokens = lexer.Tokenize(source);
 
     parser::Cursor     cursor{source, tokens, diagnostics};
-    parser::Parser     parser{source, tokens, diagnostics};
-    parser::ExprParser expr_parser{cursor, parser};
+    parser::ExprParser expr_parser{cursor};
 
     const auto expression = expr_parser.ParseExpression(6);
     ASSERT_NE(expression, nullptr);
@@ -63,8 +60,7 @@ TEST(ExprParserTest, DiagnosedExpressionFailuresLeaveCallerBoundariesIntact) {
         const auto              tokens = lexer.Tokenize(source);
 
         parser::Cursor     cursor{source, tokens, diagnostics};
-        parser::Parser     parser{source, tokens, diagnostics};
-        parser::ExprParser expr_parser{cursor, parser};
+        parser::ExprParser expr_parser{cursor};
 
         const auto expression = expr_parser.ParseExpression();
         EXPECT_EQ(expression, nullptr);

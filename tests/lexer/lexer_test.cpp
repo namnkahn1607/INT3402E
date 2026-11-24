@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -83,17 +84,20 @@ TEST_F(LexerTest, RetainsAndDiagnosesInvalidNumericCandidates) {
          {"3.14", ".5", "3.", "1e10", "1E-5", "3.14f", "1f", "42F", ".5L",
           "3.l", "3.14e+2F", "1e3L"}) {
         SCOPED_TRACE(src);
-        testing::internal::CaptureStderr();
-        const auto tokens  = scanner.Tokenize(src);
-        const auto reports = testing::internal::GetCapturedStderr();
+        const auto before = diag.Collected().size();
+        const auto tokens = scanner.Tokenize(src);
         ASSERT_EQ(tokens.size(), 1U);
         EXPECT_EQ(tokens[0].kind, lexer::TokenKind::invalid_numeric_constant);
         EXPECT_EQ(tokens[0].lexeme, src);
         EXPECT_EQ(tokens[0].loc.line, 1);
         EXPECT_EQ(tokens[0].loc.col, 1);
         EXPECT_TRUE(diag.HasErrors());
-        EXPECT_EQ(reports,
-                  "1:1: error: invalid numeric constant: '" + src + "'\n");
+        ASSERT_EQ(diag.Collected().size(), before + 1U);
+        const auto& reported = diag.Collected().back();
+        EXPECT_EQ(reported.loc.line, 1);
+        EXPECT_EQ(reported.loc.col, 1);
+        EXPECT_EQ(reported.severity, common::Severity::kError);
+        EXPECT_EQ(reported.message, "invalid numeric constant: '" + src + "'");
     }
 }
 
@@ -118,9 +122,8 @@ TEST_F(LexerTest, RetainsAndDiagnosesWholeInvalidIdentifiers) {
     for (const std::string spelling :
          {"a1b", "_x", "a_b", "_", "print_", "do1again", "A1B2", "x12y34"}) {
         SCOPED_TRACE(spelling);
-        testing::internal::CaptureStderr();
-        const auto tokens  = scanner.Tokenize(spelling + "; answer12");
-        const auto reports = testing::internal::GetCapturedStderr();
+        const auto before = diag.Collected().size();
+        const auto tokens = scanner.Tokenize(spelling + "; answer12");
         ASSERT_EQ(tokens.size(), 3U);
         EXPECT_EQ(tokens[0].kind, lexer::TokenKind::invalid_identifier);
         EXPECT_EQ(tokens[0].lexeme, spelling);
@@ -130,16 +133,20 @@ TEST_F(LexerTest, RetainsAndDiagnosesWholeInvalidIdentifiers) {
         EXPECT_EQ(tokens[2].kind, lexer::TokenKind::identifier);
         EXPECT_EQ(tokens[2].lexeme, "answer12");
         EXPECT_TRUE(diag.HasErrors());
-        EXPECT_EQ(reports,
-                  "1:1: error: invalid identifier: '" + spelling + "'\n");
+        ASSERT_EQ(diag.Collected().size(), before + 1U);
+        const auto& reported = diag.Collected().back();
+        EXPECT_EQ(reported.loc.line, 1);
+        EXPECT_EQ(reported.loc.col, 1);
+        EXPECT_EQ(reported.severity, common::Severity::kError);
+        EXPECT_EQ(reported.message, "invalid identifier: '" + spelling + "'");
     }
 }
 
 TEST_F(LexerTest, InvalidDiagnosticsAndTokensShareLocationsAcrossTrivia) {
-    testing::internal::CaptureStderr();
     const auto tokens = scanner.Tokenize(
         "/* first\nsecond */\n  _x 3.14 // skip a1b 1e3\nanswer12\n\ta1b 1e3");
-    const auto reports = testing::internal::GetCapturedStderr();
+    std::ostringstream reports;
+    diag.Print(reports);
     ASSERT_EQ(tokens.size(), 5U);
     const std::vector<std::pair<int, int>> positions{
         {3, 3}, {3, 6}, {4, 1}, {5, 2}, {5, 6}};
@@ -153,7 +160,7 @@ TEST_F(LexerTest, InvalidDiagnosticsAndTokensShareLocationsAcrossTrivia) {
         EXPECT_EQ(tokens[index].loc.line, positions[index].first);
         EXPECT_EQ(tokens[index].loc.col, positions[index].second);
     }
-    EXPECT_EQ(reports,
+    EXPECT_EQ(reports.str(),
               "3:3: error: invalid identifier: '_x'\n"
               "3:6: error: invalid numeric constant: '3.14'\n"
               "5:2: error: invalid identifier: 'a1b'\n"

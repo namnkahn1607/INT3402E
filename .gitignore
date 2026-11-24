@@ -1,13 +1,15 @@
-.aider*
-
+.agents/
 .cache/
-.vscode/
+.codex/
 bin/
 build/
 out/
 
 .env
+.neocmakelint.toml
 compile_commands.json
 lang_feature_demo.cpp
 prompt.txt
 token_stream.txt
+
+sample.txt

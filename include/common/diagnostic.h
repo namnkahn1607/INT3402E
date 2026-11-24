@@ -1,18 +1,30 @@
 #pragma once
 
+#include <cstdint>
+#include <iosfwd>
+#include <span>
 #include <string>
+#include <vector>
+
+#include "common/location.h"
 
 namespace common {
 
-enum class Severity {
+enum class Severity : std::uint8_t {
     kWarning,
     kError,
 };
 
-struct Diagnostic {
-    int         line, col;
-    Severity    severity;
+struct Note {
+    Location    loc;
     std::string message;
+};
+
+struct Diagnostic {
+    Location          loc;
+    Severity          severity;
+    std::string       message;
+    std::vector<Note> notes;
 };
 
 class DiagnosisEngine {
@@ -20,18 +32,28 @@ public:
     DiagnosisEngine()  = default;
     ~DiagnosisEngine() = default;
 
-    // Reports either a warning or error into standard error.
-    // Returns `true` on error found, `false` otherwise.
-    bool Report(const Diagnostic& d) noexcept;
+    // Records a `Diagnostic` of any severity level.
+    void Record(Diagnostic d);
 
-    // Summarizes compilation process. Only invoke upon halting.
-    void Summarize() const noexcept;
+    // Prints all collected diagnostics to `out` (defaults to `std::cerr`).
+    void Print(std::ostream& out) const;
+    void Print() const;
 
-    [[nodiscard]] bool HasErrors() const noexcept { return err_found_; }
+    // Summarizes compilation process to `out` (defaults to `std::cerr`).
+    // Only invoke upon halting.
+    void Summarize(std::ostream& out) const;
+    void Summarize() const;
+
+    // Collection of all `Diagnostic` reported so far.
+    [[nodiscard]] std::span<const Diagnostic> Collected() const noexcept { return collections_; }
+
+    [[nodiscard]] bool HasErrors() const noexcept { return err_count_ > 0; }
 
 private:
-    int  warning_count_ = 0;
-    bool err_found_     = false;
+    int warn_count_ = 0;
+    int err_count_  = 0;
+
+    std::vector<Diagnostic> collections_;
 };
 
 }  // namespace common

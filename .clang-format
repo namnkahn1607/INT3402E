@@ -1,22 +1,19 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/SchemaStore/schemastore/master/src/schemas/json/clang-format-18.x.json
 Language: Cpp
 BasedOnStyle: Google
+ColumnLimit: 100
 
 AccessModifierOffset: -4
-AlignAfterOpenBracket: BlockIndent
 AlignConsecutiveAssignments:
-  Enabled: true
-  AcrossEmptyLines: false
-  AcrossComments: false
+    Enabled: true
 AlignConsecutiveDeclarations:
-  Enabled: true
-  AcrossEmptyLines: false
-  AcrossComments: false
+    Enabled: true
 AllowShortCaseLabelsOnASingleLine: true
 BreakConstructorInitializers: BeforeComma
 DerivePointerAlignment: false
 IndentWidth: 4
 InsertNewlineAtEOF: true
 PointerAlignment: Left
-SortIncludes: true
+SortIncludes: CaseSensitive
 TabWidth: 4
 UseTab: Never

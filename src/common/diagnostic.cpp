@@ -1,30 +1,58 @@
 #include "common/diagnostic.h"
 
+#include <cassert>
 #include <iostream>
+#include <string_view>
+#include <utility>
 
 namespace common {
 
-bool DiagnosisEngine::Report(const Diagnostic& d) noexcept {
-    const char* tag;
-    if (d.severity == Severity::kError) {
-        tag        = "error";
-        err_found_ = true;
-    } else {
-        tag = "warning";
-        ++warning_count_;
-    }
+namespace {
 
-    std::cerr << d.line << ':' << d.col << ": " << tag << ": " << d.message
-              << '\n';
-    return err_found_;
+std::string_view SeverityTag(Severity severity) {
+    switch (severity) {
+        case Severity::kWarning: return "warning";
+        case Severity::kError: return "error";
+    }
+    assert(false && "unhandled Severity");
+    return "?";
 }
 
-void DiagnosisEngine::Summarize() const noexcept {
-    std::cerr << warning_count_ << " warning(s) generated";
-    if (err_found_) {
-        std::cerr << ", compilation failed";
+}  // namespace
+
+void DiagnosisEngine::Record(Diagnostic d) {
+    const auto severity = d.severity;
+    collections_.push_back(std::move(d));
+    switch (severity) {
+        case Severity::kError: ++err_count_; break;
+        case Severity::kWarning: ++warn_count_; break;
     }
-    std::cerr << "\n";
 }
+
+void DiagnosisEngine::Print(std::ostream& out) const {
+    for (const auto& d : collections_) {
+        out << d.loc.line << ':' << d.loc.col << ": " << SeverityTag(d.severity) << ": "
+            << d.message << '\n';
+        for (const auto& note : d.notes) {
+            out << note.loc.line << ':' << note.loc.col << ": note: " << note.message
+                << '\n';
+        }
+    }
+}
+
+void DiagnosisEngine::Print() const { Print(std::cerr); }
+
+void DiagnosisEngine::Summarize(std::ostream& out) const {
+    if (warn_count_ == 0 && err_count_ == 0) return;
+    if (warn_count_ > 0) {
+        out << warn_count_ << " warning(s) generated";
+        if (err_count_ > 0) out << ", ";
+    }
+    if (err_count_ > 0) out << err_count_ << " error(s) found, compilation failed";
+
+    out << '\n';
+}
+
+void DiagnosisEngine::Summarize() const { Summarize(std::cerr); }
 
 }  // namespace common

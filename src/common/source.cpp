@@ -1,0 +1,46 @@
+#include "common/source.h"
+
+#include <fstream>
+#include <ios>
+#include <optional>
+#include <string>
+#include <utility>
+
+#include "common/diagnostic.h"
+
+namespace common {
+
+std::optional<SourceBuf> LoadSource(const std::string& path, DiagnosisEngine& diag) {
+    std::ifstream file{path, std::ios::binary};
+    if (!file) {
+        diag.Record({.loc      = {.line = 0, .col = 0},
+                     .severity = Severity::kError,
+                     .message  = "cannot open source: " + path,
+                     .notes{}});
+        return std::nullopt;
+    }
+
+    file.seekg(0, std::ios::end);
+    std::streamsize size = file.tellg();
+    if (size < 0) {
+        diag.Record({.loc      = {.line = 0, .col = 0},
+                     .severity = Severity::kError,
+                     .message  = "cannot determine source size: " + path,
+                     .notes{}});
+        return std::nullopt;
+    }
+    file.seekg(0, std::ios::beg);
+
+    std::string content(static_cast<size_t>(size), '\0');
+    if (!file.read(content.data(), size)) {
+        diag.Record({.loc      = {.line = 0, .col = 0},
+                     .severity = Severity::kError,
+                     .message  = "failed reading source: " + path,
+                     .notes{}});
+        return std::nullopt;
+    }
+
+    return SourceBuf{.path = path, .text = std::move(content)};
+}
+
+}  // namespace common

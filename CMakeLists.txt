@@ -11,7 +11,9 @@ include(CTest)
 option(INT3402E_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 
 set(PUBLIC_HEADER_ROOT "${PROJECT_SOURCE_DIR}/include")
-include(cmake/add-module.cmake)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(add-module)
 
 add_library(int3402e_options INTERFACE)
 target_compile_features(int3402e_options INTERFACE cxx_std_20)

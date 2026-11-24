@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <iosfwd>
 #include <span>
 #include <string>
 #include <vector>
@@ -25,11 +26,17 @@ public:
     DiagnosisEngine()  = default;
     ~DiagnosisEngine() = default;
 
-    // Reports a `Diagnostic` of any severity level into standard error.
-    void Report(const Diagnostic& d) noexcept;
+    // Records a `Diagnostic` of any severity level.
+    void Record(Diagnostic d);
 
-    // Summarizes compilation process. Only invoke upon halting.
-    void Summarize() const noexcept;
+    // Prints all collected diagnostics to `out` (defaults to `std::cerr`).
+    void Print(std::ostream& out) const;
+    void Print() const;
+
+    // Summarizes compilation process to `out` (defaults to `std::cerr`).
+    // Only invoke upon halting.
+    void Summarize(std::ostream& out) const;
+    void Summarize() const;
 
     // Collection of all `Diagnostic` reported so far.
     [[nodiscard]] std::span<const Diagnostic> Collected() const noexcept {

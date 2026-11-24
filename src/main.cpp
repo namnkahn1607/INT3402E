@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
     if (source_file != nullptr) {
         auto loaded = common::LoadSource(source_file, diag);
         if (!loaded) {
+            diag.Print();
             diag.Summarize();
             return 1;
         }
@@ -49,18 +50,16 @@ int main(int argc, char* argv[]) {
     if (dump_ast) {
         parser::Parser parser{source, tokens, diag};
         auto           result = parser.ParseTranslationUnit();
-        if (diag.HasErrors()) {
-            diag.Summarize();
-            return 1;
-        }
+        diag.Print();
+        diag.Summarize();
+        if (diag.HasErrors()) return 1;
         ast::DumpAst(*result, std::cout);
         return 0;
     }
 
-    if (diag.HasErrors()) {
-        diag.Summarize();
-        return 1;
-    }
+    diag.Print();
+    diag.Summarize();
+    if (diag.HasErrors()) return 1;
 
     for (const auto& token : tokens) {
         std::cout << "token = " << static_cast<int>(token.kind)

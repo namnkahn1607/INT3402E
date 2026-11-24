@@ -97,7 +97,7 @@ public:
             // The caller still returns failure for contextual recovery.
             return;
         }
-        diagnostics_.Report({.loc      = {.line = loc.line, .col = loc.col},
+        diagnostics_.Record({.loc      = {.line = loc.line, .col = loc.col},
                              .severity = common::Severity::kError,
                              .message  = std::string{msg}});
     }

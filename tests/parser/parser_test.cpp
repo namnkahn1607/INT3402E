@@ -576,7 +576,8 @@ TEST(ParserLifecycleTest, RepeatedCallsResetCursorAndKeepSharedErrorState) {
 
     diagnostics.Record({.loc      = {.line = 1, .col = 1},
                         .severity = common::Severity::kError,
-                        .message  = "earlier lexical error"});
+                        .message  = "earlier lexical error",
+                        .notes{}});
     const auto second = parser.ParseTranslationUnit();
 
     EXPECT_TRUE(diagnostics.HasErrors());
@@ -613,7 +614,8 @@ TEST(ParserLifecycleTest, PriorWarningDoesNotBecomeLocalSyntaxError) {
     const auto              tokens = lexer.Tokenize(source);
     diagnostics.Record({.loc      = {.line = 1, .col = 1},
                         .severity = common::Severity::kWarning,
-                        .message  = "earlier warning"});
+                        .message  = "earlier warning",
+                        .notes{}});
     parser::Parser parser{source, tokens, diagnostics};
     const auto     result = parser.ParseTranslationUnit();
     EXPECT_FALSE(diagnostics.HasErrors());

@@ -15,7 +15,8 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
     if (src_text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
         diag_.Record({.loc      = {.line = 0, .col = 0},
                       .severity = common::Severity::kError,
-                      .message  = "source exceeds scanner limit"});
+                      .message  = "source exceeds scanner limit",
+                      .notes{}});
         return {};
     }
 
@@ -23,7 +24,8 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
     if (yylex_init_extra(LexerExtra{}, &scanner) != 0) {
         diag_.Record({.loc      = {.line = 0, .col = 0},
                       .severity = common::Severity::kError,
-                      .message  = "lexer initialization failed"});
+                      .message  = "lexer initialization failed",
+                      .notes{}});
         return {};
     }
 
@@ -52,7 +54,8 @@ std::vector<Token> Lexer::Tokenize(const std::string& src_text) {
             }
             diag_.Record({.loc      = {.line = tok.loc.line, .col = tok.loc.col},
                           .severity = common::Severity::kError,
-                          .message  = prefix + tok.lexeme + "'"});
+                          .message  = prefix + tok.lexeme + "'",
+                          .notes    = {}});
         }
 
         tokens.push_back(std::move(tok));

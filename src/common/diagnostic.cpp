@@ -33,6 +33,10 @@ void DiagnosisEngine::Print(std::ostream& out) const {
     for (const auto& d : collections_) {
         out << d.loc.line << ':' << d.loc.col << ": " << SeverityTag(d.severity) << ": "
             << d.message << '\n';
+        for (const auto& note : d.notes) {
+            out << note.loc.line << ':' << note.loc.col << ": note: " << note.message
+                << '\n';
+        }
     }
 }
 

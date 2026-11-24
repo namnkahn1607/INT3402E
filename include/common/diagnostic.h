@@ -15,10 +15,16 @@ enum class Severity : std::uint8_t {
     kError,
 };
 
-struct Diagnostic {
+struct Note {
     Location    loc;
-    Severity    severity;
     std::string message;
+};
+
+struct Diagnostic {
+    Location          loc;
+    Severity          severity;
+    std::string       message;
+    std::vector<Note> notes;
 };
 
 class DiagnosisEngine {

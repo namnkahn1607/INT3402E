@@ -15,7 +15,8 @@ std::optional<SourceBuf> LoadSource(const std::string& path, DiagnosisEngine& di
     if (!file) {
         diag.Record({.loc      = {.line = 0, .col = 0},
                      .severity = Severity::kError,
-                     .message  = "cannot open source: " + path});
+                     .message  = "cannot open source: " + path,
+                     .notes{}});
         return std::nullopt;
     }
 
@@ -24,7 +25,8 @@ std::optional<SourceBuf> LoadSource(const std::string& path, DiagnosisEngine& di
     if (size < 0) {
         diag.Record({.loc      = {.line = 0, .col = 0},
                      .severity = Severity::kError,
-                     .message  = "cannot determine source size: " + path});
+                     .message  = "cannot determine source size: " + path,
+                     .notes{}});
         return std::nullopt;
     }
     file.seekg(0, std::ios::beg);
@@ -33,7 +35,8 @@ std::optional<SourceBuf> LoadSource(const std::string& path, DiagnosisEngine& di
     if (!file.read(content.data(), size)) {
         diag.Record({.loc      = {.line = 0, .col = 0},
                      .severity = Severity::kError,
-                     .message  = "failed reading source: " + path});
+                     .message  = "failed reading source: " + path,
+                     .notes{}});
         return std::nullopt;
     }
 

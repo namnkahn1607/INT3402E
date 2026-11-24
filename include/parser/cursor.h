@@ -88,7 +88,7 @@ public:
         }
         diagnostics_.Record({.loc      = {.line = loc.line, .col = loc.col},
                              .severity = common::Severity::kError,
-                             .message  = std::string{msg}});
+                             .message  = std::string{msg}, .notes{}});
     }
 
     // Resets the cursor back to its primary state.

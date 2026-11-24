@@ -13,8 +13,7 @@ using TokenKind = lexer::TokenKind;
 
 class Cursor final {
 public:
-    Cursor(std::string_view source, std::span<const Token> tokens,
-           common::DiagnosisEngine& diag)
+    Cursor(std::string_view source, std::span<const Token> tokens, common::DiagnosisEngine& diag)
         : source_{source}, tokens_{tokens}, diagnostics_{diag} {
         // Match Flex's byte columns: only LF starts a new line, including in
         // trivia.
@@ -30,15 +29,11 @@ public:
 
     // End-of-span is an observable EOF, not a physical token.
     // Lookahead must check bounds before addition, including oversized offsets.
-    [[nodiscard]] bool AtEnd() const {
-        return current_index_ >= tokens_.size();
-    }
+    [[nodiscard]] bool AtEnd() const { return current_index_ >= tokens_.size(); }
 
     // `nullptr` when lookahead reaches or exceeds the token span.
     [[nodiscard]] const Token* PeekToken(std::size_t lookahead = 0) const {
-        if (AtEnd() || lookahead >= tokens_.size() - current_index_) {
-            return nullptr;
-        }
+        if (AtEnd() || lookahead >= tokens_.size() - current_index_) return nullptr;
         return &tokens_[current_index_ + lookahead];
     }
 
@@ -52,17 +47,13 @@ public:
     // must explicitly stop/yield at EOF.
     const Token* Consume() {
         const auto* token = PeekToken();
-        if (token != nullptr) {
-            ++current_index_;
-        }
+        if (token != nullptr) ++current_index_;
         return token;
     }
 
     // Returns `false` on `TokenKind::eof`: EOF is not consumable.
     bool Match(TokenKind kind) {
-        if (kind == TokenKind::eof || PeekKind() != kind) {
-            return false;
-        }
+        if (kind == TokenKind::eof || PeekKind() != kind) return false;
         Consume();
         return true;
     }
@@ -70,9 +61,7 @@ public:
     // On failure, diagnose without choosing a contextual synchronization
     // strategy. Observe EOF with `AtEnd()`, not `Expect(TokenKind::eof)`.
     bool Expect(TokenKind kind, std::string_view msg) {
-        if (Match(kind)) {
-            return true;
-        }
+        if (Match(kind)) return true;
         ReportSyntaxError(CurrentLocation(), msg);
         return false;
     }
@@ -105,13 +94,9 @@ public:
     // Resets the cursor back to its primary state.
     void Reset() noexcept { current_index_ = 0; }
 
-    [[nodiscard]] std::size_t CurrentIndex() const noexcept {
-        return current_index_;
-    }
+    [[nodiscard]] std::size_t CurrentIndex() const noexcept { return current_index_; }
 
-    [[nodiscard]] const Token& GetToken(std::size_t index) const {
-        return tokens_[index];
-    }
+    [[nodiscard]] const Token& GetToken(std::size_t index) const { return tokens_[index]; }
 
 private:
     std::string_view         source_;

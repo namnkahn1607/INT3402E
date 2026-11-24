@@ -39,9 +39,7 @@ public:
     void Summarize() const;
 
     // Collection of all `Diagnostic` reported so far.
-    [[nodiscard]] std::span<const Diagnostic> Collected() const noexcept {
-        return collections_;
-    }
+    [[nodiscard]] std::span<const Diagnostic> Collected() const noexcept { return collections_; }
 
     [[nodiscard]] bool HasErrors() const noexcept { return err_count_ > 0; }
 

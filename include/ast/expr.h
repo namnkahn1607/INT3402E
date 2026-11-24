@@ -36,8 +36,7 @@ struct IntLiteralExpr : Expr {
 
 struct BoolLiteralExpr : Expr {
     bool value;
-    BoolLiteralExpr(common::Location l, bool v)
-        : Expr{ExprKind::BoolLiteral, l}, value{v} {}
+    BoolLiteralExpr(common::Location l, bool v) : Expr{ExprKind::BoolLiteral, l}, value{v} {}
 };
 
 struct DeclRefExpr : Expr {
@@ -63,10 +62,7 @@ struct BinaryExpr : Expr {
     BinaryOp op;
     ExprPtr  lhs, rhs;
     BinaryExpr(common::Location l, BinaryOp o, ExprPtr a, ExprPtr b)
-        : Expr{ExprKind::Binary, l}
-        , op{o}
-        , lhs{std::move(a)}
-        , rhs{std::move(b)} {}
+        : Expr{ExprKind::Binary, l}, op{o}, lhs{std::move(a)}, rhs{std::move(b)} {}
 };
 
 }  // namespace ast

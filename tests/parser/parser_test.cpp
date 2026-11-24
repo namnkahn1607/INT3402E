@@ -268,8 +268,7 @@ TranslationUnit
 }
 
 TEST(ParserProgramTest, DeclarationsAssignmentsAndLiteralDataAreDistinct) {
-    const auto parsed =
-        ParseBody("int x; bool flag = false; x = 00042; print(flag);");
+    const auto parsed = ParseBody("int x; bool flag = false; x = 00042; print(flag);");
     EXPECT_FALSE(parsed.has_syntax_errors());
     EXPECT_FALSE(parsed.has_errors);
     ASSERT_NE(parsed.translation_unit, nullptr);
@@ -289,14 +288,12 @@ TranslationUnit
 )");
 
     // Retain direct node assertion to validate fine-grained spelling ownership
-    const auto* block = dynamic_cast<const ast::CompoundStmt*>(
-        parsed.translation_unit->statements[0].get());
+    const auto* block =
+        dynamic_cast<const ast::CompoundStmt*>(parsed.translation_unit->statements[0].get());
     ASSERT_NE(block, nullptr);
-    const auto* assign =
-        dynamic_cast<const ast::AssignStmt*>(block->body[2].get());
+    const auto* assign = dynamic_cast<const ast::AssignStmt*>(block->body[2].get());
     ASSERT_NE(assign, nullptr);
-    const auto* value =
-        dynamic_cast<const ast::IntLiteralExpr*>(assign->value.get());
+    const auto* value = dynamic_cast<const ast::IntLiteralExpr*>(assign->value.get());
     ASSERT_NE(value, nullptr);
     EXPECT_EQ(value->spelling, "00042");
 }
@@ -334,8 +331,7 @@ TranslationUnit
 )");
 }
 
-TEST(ParserProgramTest,
-     ControlStatementsUseKeywordLocationsAndAllowBoolForDeclaration) {
+TEST(ParserProgramTest, ControlStatementsUseKeywordLocationsAndAllowBoolForDeclaration) {
     const auto parsed = Parse(
         "{\n"
         "  if (true) { } else { }\n"
@@ -367,8 +363,7 @@ TranslationUnit
 }
 
 TEST(ParserExpressionTest, PrecedenceGroupingAndBinaryLocations) {
-    const auto parsed =
-        Parse("{\nint x = 1 +\n  2 * 3;\nprint((1 + 2) * 3);\n}");
+    const auto parsed = Parse("{\nint x = 1 +\n  2 * 3;\nprint((1 + 2) * 3);\n}");
     EXPECT_FALSE(parsed.has_syntax_errors());
     EXPECT_FALSE(parsed.has_errors);
     ASSERT_NE(parsed.translation_unit, nullptr);
@@ -450,9 +445,8 @@ TranslationUnit
 }
 
 TEST(ParserExpressionTest, ExplicitGroupingHasIndependentChainRestrictions) {
-    for (const std::string expression :
-         {"a > b == c > d", "(a > b) > c", "a > (b >= c)", "(a == b) == c",
-          "a == (b == c)", "((true))", "false"}) {
+    for (const std::string expression : {"a > b == c > d", "(a > b) > c", "a > (b >= c)",
+                                         "(a == b) == c", "a == (b == c)", "((true))", "false"}) {
         SCOPED_TRACE(expression);
         const auto parsed = ParseBody("print(" + expression + ");");
         EXPECT_FALSE(parsed.has_syntax_errors());
@@ -461,11 +455,9 @@ TEST(ParserExpressionTest, ExplicitGroupingHasIndependentChainRestrictions) {
     }
 }
 
-TEST(ParserExpressionTest,
-     UnparenthesizedComparisonAndEqualityChainsAreRejected) {
-    for (const std::string expression :
-         {"a > b > c", "a >= b > c", "a > b >= c", "a == b == c",
-          "a == b > c > d", "a + b > c + d > e"}) {
+TEST(ParserExpressionTest, UnparenthesizedComparisonAndEqualityChainsAreRejected) {
+    for (const std::string expression : {"a > b > c", "a >= b > c", "a > b >= c", "a == b == c",
+                                         "a == b > c > d", "a + b > c + d > e"}) {
         SCOPED_TRACE(expression);
         const auto parsed = ParseBody("print(" + expression + ");");
         EXPECT_TRUE(parsed.has_syntax_errors());
@@ -475,9 +467,8 @@ TEST(ParserExpressionTest,
 }
 
 TEST(ParserGrammarTest, AssignmentsRemainStatementsNotExpressions) {
-    for (const std::string source :
-         {"x = y = 1;", "int y = (x = 1);", "print(x = 1);", "if (x = 1) { }",
-          "for (x = 0; x = 1; x = 2) { }"}) {
+    for (const std::string source : {"x = y = 1;", "int y = (x = 1);", "print(x = 1);",
+                                     "if (x = 1) { }", "for (x = 0; x = 1; x = 2) { }"}) {
         SCOPED_TRACE(source);
         const auto parsed = Parse(source);
         EXPECT_TRUE(parsed.has_syntax_errors());
@@ -488,11 +479,10 @@ TEST(ParserGrammarTest, AssignmentsRemainStatementsNotExpressions) {
 }
 
 TEST(ParserGrammarTest, RestrictedNamesAllowDigitSuffixesAndKeywordPrefixes) {
-    for (const std::string name : {"answer12", "A", "AbZ009", "print1", "done",
-                                   "do1", "main", "integer", "true1"}) {
+    for (const std::string name :
+         {"answer12", "A", "AbZ009", "print1", "done", "do1", "main", "integer", "true1"}) {
         SCOPED_TRACE(name);
-        const auto parsed = ParseBody(
-            std::format("int {0} = 1; {0} = {0} + 1; print({0});", name));
+        const auto parsed = ParseBody(std::format("int {0} = 1; {0} = {0} + 1; print({0});", name));
         EXPECT_FALSE(parsed.has_syntax_errors());
         EXPECT_FALSE(parsed.has_errors);
         ASSERT_NE(parsed.translation_unit, nullptr);
@@ -500,14 +490,12 @@ TEST(ParserGrammarTest, RestrictedNamesAllowDigitSuffixesAndKeywordPrefixes) {
 }
 
 TEST(ParserGrammarTest, InvalidNamesAreRejectedInEveryNameContext) {
-    for (const std::string name :
-         {"_answer", "a1b", "a_b", "do", "print", "int", "while"}) {
-        for (const auto& body : std::vector<std::string>{
-                 "int " + name + ";", name + " = 1;", "print(" + name + ");"}) {
+    for (const std::string name : {"_answer", "a1b", "a_b", "do", "print", "int", "while"}) {
+        for (const auto& body : std::vector<std::string>{"int " + name + ";", name + " = 1;",
+                                                         "print(" + name + ");"}) {
             SCOPED_TRACE(body);
-            const auto parsed = ParseBody(body);
-            const bool invalid_spelling =
-                name == "_answer" || name == "a1b" || name == "a_b";
+            const auto parsed           = ParseBody(body);
+            const bool invalid_spelling = name == "_answer" || name == "a1b" || name == "a_b";
             EXPECT_EQ(parsed.has_syntax_errors(), !invalid_spelling);
             EXPECT_TRUE(parsed.has_errors);
             EXPECT_FALSE(parsed.all_diagnostics.empty());
@@ -518,14 +506,13 @@ TEST(ParserGrammarTest, InvalidNamesAreRejectedInEveryNameContext) {
 
 TEST(ParserGrammarTest, LexerRecognitionDoesNotBroadenSupportedExpressions) {
     for (const std::string expression :
-         {"3.14", ".5", "3.", "1e3", "1f", "-1", "!true", "+1", "a - b",
-          "a / b", "a < b", "a <= b", "a && b", "a || b", "a++", "a--", "f(a)",
-          "a = 1", "a + (b = 1)"}) {
+         {"3.14", ".5", "3.", "1e3", "1f", "-1", "!true", "+1", "a - b", "a / b", "a < b", "a <= b",
+          "a && b", "a || b", "a++", "a--", "f(a)", "a = 1", "a + (b = 1)"}) {
         SCOPED_TRACE(expression);
-        const auto parsed = ParseBody("print(" + expression + ");");
-        const bool invalid_spelling =
-            expression == "3.14" || expression == ".5" || expression == "3." ||
-            expression == "1e3" || expression == "1f";
+        const auto parsed           = ParseBody("print(" + expression + ");");
+        const bool invalid_spelling = expression == "3.14" || expression == ".5" ||
+                                      expression == "3." || expression == "1e3" ||
+                                      expression == "1f";
         EXPECT_EQ(parsed.has_syntax_errors(), !invalid_spelling);
         EXPECT_TRUE(parsed.has_errors);
         EXPECT_FALSE(parsed.all_diagnostics.empty());
@@ -566,9 +553,8 @@ TEST(ParserGrammarTest, UnsupportedStatementsTypesAndForFieldsAreRejected) {
 
 TEST(ParserGrammarTest, FunctionDeclarationsAndDefinitionsAreDeferred) {
     for (const std::string function :
-         {"int main() { }", "int other() { }", "bool other() { }",
-          "void main() { }", "int main(int x) { }", "int main()", "int main();",
-          "int other();"}) {
+         {"int main() { }", "int other() { }", "bool other() { }", "void main() { }",
+          "int main(int x) { }", "int main()", "int main();", "int other();"}) {
         for (const auto& source : {function, "{ " + function + " }"}) {
             SCOPED_TRACE(source);
             const auto parsed = Parse(source);
@@ -637,8 +623,7 @@ TranslationUnit
 )");
 }
 
-TEST(ParserLifecycleTest,
-     RepeatedLexicalFailuresDoNotRediagnoseOrSetSyntaxStatus) {
+TEST(ParserLifecycleTest, RepeatedLexicalFailuresDoNotRediagnoseOrSetSyntaxStatus) {
     const std::string       source = "{ int a1b; print(9); }";
     common::DiagnosisEngine diagnostics;
     lexer::Lexer            lexer{diagnostics};
@@ -671,7 +656,7 @@ TranslationUnit
 TEST(ParserLifecycleTest, TreesOwnSpellingsAfterAllBorrowedInputsAreDestroyed) {
     std::unique_ptr<ast::TranslationUnit> result;
     {
-        const std::string source = "{ int answer12 = 00042; print(answer12); }";
+        const std::string       source = "{ int answer12 = 00042; print(answer12); }";
         common::DiagnosisEngine diagnostics;
         lexer::Lexer            lexer{diagnostics};
         const auto              tokens = lexer.Tokenize(source);

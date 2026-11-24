@@ -5,8 +5,7 @@
 #include "lexer/lexer.h"
 
 TEST(ExprParserTest, ExpressionsLeaveEveryCallerBoundaryIntact) {
-    for (const auto& [source, separator] :
-         std::vector<std::pair<std::string, lexer::TokenKind>>{
+    for (const auto& [source, separator] : std::vector<std::pair<std::string, lexer::TokenKind>>{
              {"(1 + 2) * 3;", lexer::TokenKind::semi},
              {"((answer12)))", lexer::TokenKind::r_paren},
              {"true}", lexer::TokenKind::r_brace},
@@ -37,8 +36,7 @@ TEST(ExprParserTest, PrattMinimumBindingPowerLeavesWeakerOperatorForCaller) {
 
     const auto expression = expr_parser.ParseExpression(6);
     ASSERT_NE(expression, nullptr);
-    const auto* multiplication =
-        dynamic_cast<const ast::BinaryExpr*>(expression.get());
+    const auto* multiplication = dynamic_cast<const ast::BinaryExpr*>(expression.get());
     ASSERT_NE(multiplication, nullptr);
     EXPECT_EQ(multiplication->op, ast::BinaryOp::Mul);
     EXPECT_EQ(cursor.PeekKind(), lexer::TokenKind::plus);
@@ -47,13 +45,12 @@ TEST(ExprParserTest, PrattMinimumBindingPowerLeavesWeakerOperatorForCaller) {
 
 TEST(ExprParserTest, DiagnosedExpressionFailuresLeaveCallerBoundariesIntact) {
     for (const auto& [source, separator] :
-         std::vector<std::pair<std::string, lexer::TokenKind>>{
-             {";", lexer::TokenKind::semi},
-             {"(1 + ;", lexer::TokenKind::semi},
-             {"1 + )", lexer::TokenKind::r_paren},
-             {"(1 + 2;", lexer::TokenKind::semi},
-             {"1 * }", lexer::TokenKind::r_brace},
-             {"1 +", lexer::TokenKind::eof}}) {
+         std::vector<std::pair<std::string, lexer::TokenKind>>{{";", lexer::TokenKind::semi},
+                                                               {"(1 + ;", lexer::TokenKind::semi},
+                                                               {"1 + )", lexer::TokenKind::r_paren},
+                                                               {"(1 + 2;", lexer::TokenKind::semi},
+                                                               {"1 * }", lexer::TokenKind::r_brace},
+                                                               {"1 +", lexer::TokenKind::eof}}) {
         SCOPED_TRACE(source);
         common::DiagnosisEngine diagnostics;
         lexer::Lexer            lexer{diagnostics};
@@ -67,7 +64,6 @@ TEST(ExprParserTest, DiagnosedExpressionFailuresLeaveCallerBoundariesIntact) {
         EXPECT_TRUE(diagnostics.HasErrors());
         EXPECT_EQ(cursor.PeekKind(), separator);
         ASSERT_EQ(diagnostics.Collected().size(), 1U);
-        EXPECT_EQ(diagnostics.Collected()[0].severity,
-                  common::Severity::kError);
+        EXPECT_EQ(diagnostics.Collected()[0].severity, common::Severity::kError);
     }
 }

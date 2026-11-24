@@ -10,8 +10,7 @@
 
 namespace common {
 
-std::optional<SourceBuf> LoadSource(const std::string& path,
-                                    DiagnosisEngine&   diag) {
+std::optional<SourceBuf> LoadSource(const std::string& path, DiagnosisEngine& diag) {
     std::ifstream file{path, std::ios::binary};
     if (!file) {
         diag.Record({.loc      = {.line = 0, .col = 0},

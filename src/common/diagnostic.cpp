@@ -31,8 +31,8 @@ void DiagnosisEngine::Record(Diagnostic d) {
 
 void DiagnosisEngine::Print(std::ostream& out) const {
     for (const auto& d : collections_) {
-        out << d.loc.line << ':' << d.loc.col << ": " << SeverityTag(d.severity)
-            << ": " << d.message << '\n';
+        out << d.loc.line << ':' << d.loc.col << ": " << SeverityTag(d.severity) << ": "
+            << d.message << '\n';
     }
 }
 
@@ -44,8 +44,7 @@ void DiagnosisEngine::Summarize(std::ostream& out) const {
         out << warn_count_ << " warning(s) generated";
         if (err_count_ > 0) out << ", ";
     }
-    if (err_count_ > 0)
-        out << err_count_ << " error(s) found, compilation failed";
+    if (err_count_ > 0) out << err_count_ << " error(s) found, compilation failed";
 
     out << '\n';
 }

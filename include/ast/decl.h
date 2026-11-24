@@ -35,10 +35,7 @@ struct VarDecl : Decl {
     ExprPtr     init;  // `nullptr` if uninitialized
 
     VarDecl(common::Location l, Type t, std::string n, ExprPtr i = nullptr)
-        : Decl{DeclKind::Var, l}
-        , type{t}
-        , name{std::move(n)}
-        , init(std::move(i)) {}
+        : Decl{DeclKind::Var, l}, type{t}, name{std::move(n)}, init(std::move(i)) {}
 };
 
 }  // namespace ast

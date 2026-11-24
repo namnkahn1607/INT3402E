@@ -62,8 +62,8 @@ int main(int argc, char* argv[]) {
     if (diag.HasErrors()) return 1;
 
     for (const auto& token : tokens) {
-        std::cout << "token = " << static_cast<int>(token.kind)
-                  << ", lexeme = \"" << token.lexeme << "\"\n";
+        std::cout << "token = " << static_cast<int>(token.kind) << ", lexeme = \"" << token.lexeme
+                  << "\"\n";
     }
 
     return 0;

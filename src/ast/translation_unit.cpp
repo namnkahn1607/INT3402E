@@ -41,22 +41,17 @@ void PrintLocation(std::ostream& out, common::Location loc) {
     out << '<' << loc.line << ':' << loc.col << '>';
 }
 
-void DumpExpr(const Expr& expr, std::ostream& out, const std::string& prefix,
-              bool is_last);
-void DumpStmt(const Stmt& stmt, std::ostream& out, const std::string& prefix,
-              bool is_last);
-void DumpDecl(const Decl& decl, std::ostream& out, const std::string& prefix,
-              bool is_last);
+void DumpExpr(const Expr& expr, std::ostream& out, const std::string& prefix, bool is_last);
+void DumpStmt(const Stmt& stmt, std::ostream& out, const std::string& prefix, bool is_last);
+void DumpDecl(const Decl& decl, std::ostream& out, const std::string& prefix, bool is_last);
 
 // Print the connector and return the child prefix.
-std::string PrintConnector(std::ostream& out, const std::string& prefix,
-                           bool is_last) {
+std::string PrintConnector(std::ostream& out, const std::string& prefix, bool is_last) {
     out << prefix << (is_last ? "`-" : "|-");
     return prefix + (is_last ? "  " : "| ");
 }
 
-void DumpExpr(const Expr& expr, std::ostream& out, const std::string& prefix,
-              bool is_last) {
+void DumpExpr(const Expr& expr, std::ostream& out, const std::string& prefix, bool is_last) {
     const auto child_prefix = PrintConnector(out, prefix, is_last);
     switch (expr.kind) {
         case ExprKind::IntLiteral: {
@@ -94,8 +89,7 @@ void DumpExpr(const Expr& expr, std::ostream& out, const std::string& prefix,
     }
 }
 
-void DumpDecl(const Decl& decl, std::ostream& out, const std::string& prefix,
-              bool is_last) {
+void DumpDecl(const Decl& decl, std::ostream& out, const std::string& prefix, bool is_last) {
     const auto child_prefix = PrintConnector(out, prefix, is_last);
     switch (decl.kind) {
         case DeclKind::Var: {
@@ -114,8 +108,7 @@ void DumpDecl(const Decl& decl, std::ostream& out, const std::string& prefix,
     }
 }
 
-void DumpStmt(const Stmt& stmt, std::ostream& out, const std::string& prefix,
-              bool is_last) {
+void DumpStmt(const Stmt& stmt, std::ostream& out, const std::string& prefix, bool is_last) {
     const auto child_prefix = PrintConnector(out, prefix, is_last);
     switch (stmt.kind) {
         case StmtKind::Compound: {
@@ -125,8 +118,7 @@ void DumpStmt(const Stmt& stmt, std::ostream& out, const std::string& prefix,
             out << '\n';
             for (std::size_t i = 0; i < node.body.size(); ++i) {
                 assert(node.body[i] && "CompoundStmt has null child");
-                DumpStmt(*node.body[i], out, child_prefix,
-                         i + 1 == node.body.size());
+                DumpStmt(*node.body[i], out, child_prefix, i + 1 == node.body.size());
             }
             break;
         }
@@ -217,8 +209,7 @@ void DumpStmt(const Stmt& stmt, std::ostream& out, const std::string& prefix,
 void DumpAst(const TranslationUnit& unit, std::ostream& out) {
     out << "TranslationUnit\n";
     for (std::size_t i = 0; i < unit.statements.size(); ++i) {
-        assert(unit.statements[i] &&
-               "TranslationUnit has null top-level statement");
+        assert(unit.statements[i] && "TranslationUnit has null top-level statement");
         DumpStmt(*unit.statements[i], out, "", i + 1 == unit.statements.size());
     }
 }

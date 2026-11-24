@@ -26,14 +26,11 @@ struct ParseResult {
     std::size_t                           token_count = 0;
     bool                                  has_errors  = false;
 
-    [[nodiscard]] bool has_syntax_errors() const noexcept {
-        return !syntax_errors.empty();
-    }
+    [[nodiscard]] bool has_syntax_errors() const noexcept { return !syntax_errors.empty(); }
 };
 
-inline ParseResult ParseSource(
-    const std::string&  source,
-    std::optional<bool> expected_lexical_errors = std::nullopt) {
+inline ParseResult ParseSource(const std::string&  source,
+                               std::optional<bool> expected_lexical_errors = std::nullopt) {
     common::DiagnosisEngine diagnostics;
     lexer::Lexer            lexer{diagnostics};
     const auto              tokens = lexer.Tokenize(source);
@@ -51,24 +48,20 @@ inline ParseResult ParseSource(
     std::vector<common::Diagnostic> syn_errors;
     const auto                      all = diagnostics.Collected();
     if (all.size() > lex_errors.size()) {
-        syn_errors.assign(all.begin() + static_cast<long>(lex_errors.size()),
-                          all.end());
+        syn_errors.assign(all.begin() + static_cast<long>(lex_errors.size()), all.end());
     }
 
     return ParseResult{
         .translation_unit = std::move(unit),
         .syntax_errors    = std::move(syn_errors),
         .lexical_errors   = std::move(lex_errors),
-        .all_diagnostics =
-            std::vector<common::Diagnostic>(all.begin(), all.end()),
-        .token_count = tokens.size(),
-        .has_errors  = diagnostics.HasErrors(),
+        .all_diagnostics  = std::vector<common::Diagnostic>(all.begin(), all.end()),
+        .token_count      = tokens.size(),
+        .has_errors       = diagnostics.HasErrors(),
     };
 }
 
-inline ParseResult Parse(const std::string& source) {
-    return ParseSource(source);
-}
+inline ParseResult Parse(const std::string& source) { return ParseSource(source); }
 
 inline ParseResult ParseBody(std::string_view body) {
     return Parse("{ " + std::string{body} + " }");
@@ -80,19 +73,17 @@ inline std::string DumpAstToString(const ast::TranslationUnit& unit) {
     return ss.str();
 }
 
-inline void ExpectAst(const ast::TranslationUnit& unit,
-                      std::string_view            expected_dump) {
+inline void ExpectAst(const ast::TranslationUnit& unit, std::string_view expected_dump) {
     std::string actual = DumpAstToString(unit);
     if (!expected_dump.empty() && expected_dump.front() == '\n') {
         expected_dump.remove_prefix(1);
     }
-    while (!actual.empty() && (actual.back() == '\n' || actual.back() == ' ' ||
-                               actual.back() == '\r')) {
+    while (!actual.empty() &&
+           (actual.back() == '\n' || actual.back() == ' ' || actual.back() == '\r')) {
         actual.pop_back();
     }
-    while (!expected_dump.empty() &&
-           (expected_dump.back() == '\n' || expected_dump.back() == ' ' ||
-            expected_dump.back() == '\r')) {
+    while (!expected_dump.empty() && (expected_dump.back() == '\n' || expected_dump.back() == ' ' ||
+                                      expected_dump.back() == '\r')) {
         expected_dump.remove_suffix(1);
     }
     EXPECT_EQ(actual, expected_dump);

@@ -75,8 +75,7 @@ TranslationUnit
 )");
 }
 
-TEST(ParserRecovery,
-     MissingSemicolonMidLineSkipsToSafeBoundaryWithoutInsertingTokens) {
+TEST(ParserRecovery, MissingSemicolonMidLineSkipsToSafeBoundaryWithoutInsertingTokens) {
     const auto parsed = ParseSource(
         "{\n"
         "int before; int x print(1); print(2);\n"
@@ -98,10 +97,8 @@ TranslationUnit
 )");
 }
 
-TEST(ParserRecovery,
-     FailedInitializersAreOmittedAndEachOperandIsDiagnosedOnce) {
-    const auto parsed =
-        ParseSource("{ int x = ; print(1); int y = ; print(2); }");
+TEST(ParserRecovery, FailedInitializersAreOmittedAndEachOperandIsDiagnosedOnce) {
+    const auto parsed = ParseSource("{ int x = ; print(1); int y = ; print(2); }");
     EXPECT_TRUE(parsed.has_syntax_errors());
     EXPECT_EQ(ErrorLocations(parsed).size(), 2U);
     ExpectValidPartialTree(parsed);
@@ -116,11 +113,10 @@ TranslationUnit
 )");
 }
 
-TEST(ParserRecovery,
-     ExpressionFailuresAfterConsumptionReachFollowingStatements) {
+TEST(ParserRecovery, ExpressionFailuresAfterConsumptionReachFollowingStatements) {
     for (const std::string broken :
-         {"int x = 1 + ;", "x = 2 * ;", "print(1 + );", "int x = (1 + );",
-          "print((1 + 2);", "int x = a > b > c;", "int x = a == b == c;"}) {
+         {"int x = 1 + ;", "x = 2 * ;", "print(1 + );", "int x = (1 + );", "print((1 + 2);",
+          "int x = a > b > c;", "int x = a == b == c;"}) {
         SCOPED_TRACE(broken);
         const auto parsed = ParseSource("{ " + broken + " print(9); }");
         EXPECT_TRUE(parsed.has_syntax_errors());
@@ -129,15 +125,13 @@ TEST(ParserRecovery,
 
         ASSERT_NE(parsed.translation_unit, nullptr);
         ASSERT_EQ(parsed.translation_unit->statements.size(), 1U);
-        const auto* block = dynamic_cast<const ast::CompoundStmt*>(
-            parsed.translation_unit->statements[0].get());
+        const auto* block =
+            dynamic_cast<const ast::CompoundStmt*>(parsed.translation_unit->statements[0].get());
         ASSERT_NE(block, nullptr);
         ASSERT_EQ(block->body.size(), 1U);
-        const auto* print =
-            dynamic_cast<const ast::PrintStmt*>(block->body[0].get());
+        const auto* print = dynamic_cast<const ast::PrintStmt*>(block->body[0].get());
         ASSERT_NE(print, nullptr);
-        const auto* lit =
-            dynamic_cast<const ast::IntLiteralExpr*>(print->value.get());
+        const auto* lit = dynamic_cast<const ast::IntLiteralExpr*>(print->value.get());
         ASSERT_NE(lit, nullptr);
         EXPECT_EQ(lit->spelling, "9");
     }
@@ -157,8 +151,7 @@ TranslationUnit
 )");
 }
 
-TEST(ParserRecovery,
-     MultilineOperandAndTrailingCommentEofLocationsAreAccurate) {
+TEST(ParserRecovery, MultilineOperandAndTrailingCommentEofLocationsAreAccurate) {
     const auto malformed_expression = ParseSource(
         "{\n"
         "/* first\n"
@@ -179,9 +172,8 @@ TranslationUnit
     `-IntLiteralExpr <6:7> '2'
 )");
 
-    for (const auto& source :
-         {std::string{"{\n// tail\n"}, std::string{"{ int x =\n/* tail\n*/\n"},
-          std::string{"{ print((1 +\n// tail\n"}}) {
+    for (const auto& source : {std::string{"{\n// tail\n"}, std::string{"{ int x =\n/* tail\n*/\n"},
+                               std::string{"{ print((1 +\n// tail\n"}}) {
         SCOPED_TRACE(source);
         const auto parsed = ParseSource(source);
         EXPECT_TRUE(parsed.has_syntax_errors());
@@ -191,8 +183,7 @@ TranslationUnit
         if (source == "{\n// tail\n") {
             EXPECT_EQ(errors.size(), 1U);
         }
-        const int expected_line =
-            source.find("/*") == std::string::npos ? 3 : 4;
+        const int expected_line = source.find("/*") == std::string::npos ? 3 : 4;
         for (const auto location : errors) {
             ExpectLocation(location, expected_line, 1);
         }
@@ -200,16 +191,13 @@ TranslationUnit
     }
 }
 
-TEST(ParserRecovery,
-     MalformedForHeadersNeverLeakHeaderFragmentsIntoStatements) {
-    for (const std::string header :
-         {"; true; leaked = 1", "int i = ; true; leaked = 1",
-          "int i = 0; ; leaked = 1", "int i = 0; 1 + ; leaked = 1",
-          "int i = 0; true; leaked =", "int i = 0; true; leaked = 1 +",
-          "int i = 0; true; leaked = (1 + 2"}) {
+TEST(ParserRecovery, MalformedForHeadersNeverLeakHeaderFragmentsIntoStatements) {
+    for (const std::string header : {"; true; leaked = 1", "int i = ; true; leaked = 1",
+                                     "int i = 0; ; leaked = 1", "int i = 0; 1 + ; leaked = 1",
+                                     "int i = 0; true; leaked =", "int i = 0; true; leaked = 1 +",
+                                     "int i = 0; true; leaked = (1 + 2"}) {
         SCOPED_TRACE(header);
-        const auto parsed =
-            ParseSource("{ for (" + header + ") { print(1); } print(2); }");
+        const auto parsed = ParseSource("{ for (" + header + ") { print(1); } print(2); }");
         EXPECT_TRUE(parsed.has_syntax_errors());
         const auto errors = ErrorLocations(parsed);
         EXPECT_FALSE(errors.empty());
@@ -231,20 +219,16 @@ TEST(ParserRecovery,
     }
 }
 
-TEST(ParserRecovery,
-     MalformedNestedControlsTerminateWithStructurallyValidTrees) {
+TEST(ParserRecovery, MalformedNestedControlsTerminateWithStructurallyValidTrees) {
     for (const std::string source :
-         {"{ if () { print(1); } print(2); }",
-          "{ if (true { int hidden; } print(2); }",
+         {"{ if () { print(1); } print(2); }", "{ if (true { int hidden; } print(2); }",
           "{ if (true) { int x = ; } else { print(2); } }",
-          "{ if (true) { } else print(2); print(3); }",
-          "{ do { print(1); } while (); print(2); }",
+          "{ if (true) { } else print(2); print(3); }", "{ do { print(1); } while (); print(2); }",
           "{ do { if (true) { print(1); } } print(2); }",
           "{ for (int i = 0; true; i = 1) { if (true) { int x = } } }",
           "{ { if (true { { int x; } } } print(3); }",
           "{ if (true) { do { print(1); } while (1 + } }",
-          "{ for (int i = 0; (true; i = 1) { print(1); } }",
-          "{ int x = (1 + 2; print(9); }"}) {
+          "{ for (int i = 0; (true; i = 1) { print(1); } }", "{ int x = (1 + 2; print(9); }"}) {
         SCOPED_TRACE(source);
         const auto parsed = ParseSource(source);
         EXPECT_TRUE(parsed.has_syntax_errors());
@@ -274,8 +258,7 @@ TEST(ParserRecovery, LexicalFailuresRetainValidStatementsWithoutSyntaxErrors) {
     ExpectLocation(parsed.lexical_errors[0].loc, 2, 5);
     EXPECT_EQ(parsed.lexical_errors[0].message, "invalid identifier: 'a1b'");
     ExpectLocation(parsed.lexical_errors[1].loc, 4, 9);
-    EXPECT_EQ(parsed.lexical_errors[1].message,
-              "invalid numeric constant: '3.14'");
+    EXPECT_EQ(parsed.lexical_errors[1].message, "invalid numeric constant: '3.14'");
     ExpectLocation(parsed.lexical_errors[2].loc, 6, 1);
     EXPECT_EQ(parsed.lexical_errors[2].message, "invalid identifier: '_x'");
     ExpectLocation(parsed.lexical_errors[3].loc, 8, 7);
@@ -296,8 +279,7 @@ TranslationUnit
 )");
 }
 
-TEST(ParserRecovery,
-     MixedLexicalAndSyntaxErrorsKeepDistinctStatusAndLocations) {
+TEST(ParserRecovery, MixedLexicalAndSyntaxErrorsKeepDistinctStatusAndLocations) {
     const auto parsed = ParseSource(
         "{\n"
         "int x = 1e3;\n"
@@ -316,8 +298,7 @@ TEST(ParserRecovery,
     EXPECT_TRUE(parsed.has_errors);
     ASSERT_EQ(parsed.lexical_errors.size(), 2U);
     ExpectLocation(parsed.lexical_errors[0].loc, 2, 9);
-    EXPECT_EQ(parsed.lexical_errors[0].message,
-              "invalid numeric constant: '1e3'");
+    EXPECT_EQ(parsed.lexical_errors[0].message, "invalid numeric constant: '1e3'");
     ExpectLocation(parsed.lexical_errors[1].loc, 8, 3);
     EXPECT_EQ(parsed.lexical_errors[1].message, "invalid identifier: '_x'");
 
@@ -325,8 +306,7 @@ TEST(ParserRecovery,
     ExpectLocation(parsed.syntax_errors[0].loc, 3, 9);
     EXPECT_EQ(parsed.syntax_errors[0].message, "expected an expression");
     ExpectLocation(parsed.syntax_errors[1].loc, 10, 11);
-    EXPECT_EQ(parsed.syntax_errors[1].message,
-              "chained comparison or equality is not supported");
+    EXPECT_EQ(parsed.syntax_errors[1].message, "chained comparison or equality is not supported");
 
     ExpectValidPartialTree(parsed);
     ExpectAst(*parsed.translation_unit, R"(
@@ -344,12 +324,10 @@ TranslationUnit
 TEST(ParserRecovery, InvalidSpellingsInControlsDoNotLeakMalformedChildren) {
     for (const std::string broken :
          {"if (_x) { print(1); }", "do { print(1); } while (1e3);",
-          "for (int a1b = 0; true; x = 1) { print(1); }",
-          "for (_x = 0; true; x = 1) { print(1); }",
+          "for (int a1b = 0; true; x = 1) { print(1); }", "for (_x = 0; true; x = 1) { print(1); }",
           "for (int x = 0; 3.14; x = 1) { print(1); }",
           "for (int x = 0; true; _x = 1) { print(1); }",
-          "for (int x = 0; true; x = 1e3) { print(1); }",
-          "if (true) { int _x; print(1); }",
+          "for (int x = 0; true; x = 1e3) { print(1); }", "if (true) { int _x; print(1); }",
           "do { print(3.14); print(1); } while (true);"}) {
         SCOPED_TRACE(broken);
         const auto parsed = ParseSource("{ " + broken + " print(9); }", true);
@@ -360,15 +338,13 @@ TEST(ParserRecovery, InvalidSpellingsInControlsDoNotLeakMalformedChildren) {
 
         ASSERT_NE(parsed.translation_unit, nullptr);
         ASSERT_EQ(parsed.translation_unit->statements.size(), 1U);
-        const auto* block = dynamic_cast<const ast::CompoundStmt*>(
-            parsed.translation_unit->statements[0].get());
+        const auto* block =
+            dynamic_cast<const ast::CompoundStmt*>(parsed.translation_unit->statements[0].get());
         ASSERT_NE(block, nullptr);
         ASSERT_FALSE(block->body.empty());
-        const auto* last =
-            dynamic_cast<const ast::PrintStmt*>(block->body.back().get());
+        const auto* last = dynamic_cast<const ast::PrintStmt*>(block->body.back().get());
         ASSERT_NE(last, nullptr);
-        const auto* lit =
-            dynamic_cast<const ast::IntLiteralExpr*>(last->value.get());
+        const auto* lit = dynamic_cast<const ast::IntLiteralExpr*>(last->value.get());
         ASSERT_NE(lit, nullptr);
         EXPECT_EQ(lit->spelling, "9");
     }
@@ -376,9 +352,8 @@ TEST(ParserRecovery, InvalidSpellingsInControlsDoNotLeakMalformedChildren) {
 
 TEST(ParserRecovery, InvalidSpellingsAtExpectedDelimitersRemainLexerOwned) {
     for (const std::string broken :
-         {"int x _x;", "x _x;", "print _x;", "print(1 _x);", "if _x { }",
-          "if (true) _x;", "do { } _x;", "for _x;",
-          "for (int x = 0; true; x = 1 _x) { }"}) {
+         {"int x _x;", "x _x;", "print _x;", "print(1 _x);", "if _x { }", "if (true) _x;",
+          "do { } _x;", "for _x;", "for (int x = 0; true; x = 1 _x) { }"}) {
         SCOPED_TRACE(broken);
         const auto parsed = ParseSource("{ " + broken + " print(9); }", true);
         EXPECT_FALSE(parsed.has_syntax_errors());
@@ -421,8 +396,7 @@ TEST(ParserRecovery, InvalidTokenPrefixesTerminateWithBoundedDiagnostics) {
 }
 
 TEST(ParserRecovery, FileScopeRecoversAcrossLinesAndConsumesStrayBraces) {
-    const auto parsed =
-        ParseSource("int x = ;\nprint(1);\n}\nint y = 2;\nprint(y);\n}");
+    const auto parsed = ParseSource("int x = ;\nprint(1);\n}\nint y = 2;\nprint(y);\n}");
     EXPECT_TRUE(parsed.has_syntax_errors());
     const auto errors = ErrorLocations(parsed);
     ASSERT_EQ(errors.size(), 3U);
@@ -465,8 +439,8 @@ TranslationUnit
 
 TEST(ParserRecovery, UnsupportedFunctionsDoNotLeakBodiesOrEraseLaterItems) {
     for (const std::string function :
-         {"int main() { print(2); }", "int other();",
-          "bool other() { print(2); }", "int other(int x) { print(x); }"}) {
+         {"int main() { print(2); }", "int other();", "bool other() { print(2); }",
+          "int other(int x) { print(x); }"}) {
         SCOPED_TRACE(function);
         const auto parsed = ParseSource("print(1); " + function + " print(3);");
         EXPECT_TRUE(parsed.has_syntax_errors());
@@ -475,20 +449,16 @@ TEST(ParserRecovery, UnsupportedFunctionsDoNotLeakBodiesOrEraseLaterItems) {
 
         ASSERT_NE(parsed.translation_unit, nullptr);
         ASSERT_EQ(parsed.translation_unit->statements.size(), 2U);
-        EXPECT_EQ(parsed.translation_unit->statements[0]->kind,
-                  ast::StmtKind::Print);
-        EXPECT_EQ(parsed.translation_unit->statements[1]->kind,
-                  ast::StmtKind::Print);
-        const auto* p1 = dynamic_cast<const ast::PrintStmt*>(
-            parsed.translation_unit->statements[0].get());
-        const auto* p2 = dynamic_cast<const ast::PrintStmt*>(
-            parsed.translation_unit->statements[1].get());
+        EXPECT_EQ(parsed.translation_unit->statements[0]->kind, ast::StmtKind::Print);
+        EXPECT_EQ(parsed.translation_unit->statements[1]->kind, ast::StmtKind::Print);
+        const auto* p1 =
+            dynamic_cast<const ast::PrintStmt*>(parsed.translation_unit->statements[0].get());
+        const auto* p2 =
+            dynamic_cast<const ast::PrintStmt*>(parsed.translation_unit->statements[1].get());
         ASSERT_NE(p1, nullptr);
         ASSERT_NE(p2, nullptr);
-        const auto* lit1 =
-            dynamic_cast<const ast::IntLiteralExpr*>(p1->value.get());
-        const auto* lit2 =
-            dynamic_cast<const ast::IntLiteralExpr*>(p2->value.get());
+        const auto* lit1 = dynamic_cast<const ast::IntLiteralExpr*>(p1->value.get());
+        const auto* lit2 = dynamic_cast<const ast::IntLiteralExpr*>(p2->value.get());
         ASSERT_NE(lit1, nullptr);
         ASSERT_NE(lit2, nullptr);
         EXPECT_EQ(lit1->spelling, "1");
@@ -497,8 +467,7 @@ TEST(ParserRecovery, UnsupportedFunctionsDoNotLeakBodiesOrEraseLaterItems) {
 }
 
 TEST(ParserRecovery, FileScopeLexicalFailuresKeepIndependentSyntaxStatus) {
-    const auto lexical =
-        ParseSource("int a1b; print(1); int x = 3.14; print(2);", true);
+    const auto lexical = ParseSource("int a1b; print(1); int x = 3.14; print(2);", true);
     EXPECT_FALSE(lexical.has_syntax_errors());
     EXPECT_EQ(ErrorLocations(lexical).size(), 2U);
     ExpectValidPartialTree(lexical);

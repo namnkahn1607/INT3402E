@@ -21,8 +21,7 @@ TEST_F(LexerTest, EmptyInputSucceeds) {
 }
 
 TEST_F(LexerTest, ScansDeclarationAndSkipsComments) {
-    const auto tokens =
-        scanner.Tokenize("/* comment */ int answer = 42; // end\n");
+    const auto tokens = scanner.Tokenize("/* comment */ int answer = 42; // end\n");
     ASSERT_EQ(tokens.size(), 5U);
     EXPECT_EQ(tokens[0].kind, lexer::TokenKind::kw_int);
     EXPECT_EQ(tokens[1].kind, lexer::TokenKind::identifier);
@@ -80,9 +79,8 @@ TEST_F(LexerTest, LexesIntegerConstants) {
 }
 
 TEST_F(LexerTest, RetainsAndDiagnosesInvalidNumericCandidates) {
-    for (const std::string src :
-         {"3.14", ".5", "3.", "1e10", "1E-5", "3.14f", "1f", "42F", ".5L",
-          "3.l", "3.14e+2F", "1e3L"}) {
+    for (const std::string src : {"3.14", ".5", "3.", "1e10", "1E-5", "3.14f", "1f", "42F", ".5L",
+                                  "3.l", "3.14e+2F", "1e3L"}) {
         SCOPED_TRACE(src);
         const auto before = diag.Collected().size();
         const auto tokens = scanner.Tokenize(src);
@@ -102,11 +100,11 @@ TEST_F(LexerTest, RetainsAndDiagnosesInvalidNumericCandidates) {
 }
 
 TEST_F(LexerTest, KeywordsRequireExactWholeSpellings) {
-    const std::vector<std::string> spellings{
-        "do",      "print", "do1",  "done",     "print1", "printed",
-        "integer", "true1", "main", "answer12", "AbZ009"};
-    const auto tokens = scanner.Tokenize(
-        "do print do1 done print1 printed integer true1 main answer12 AbZ009");
+    const std::vector<std::string> spellings{"do",     "print",    "do1",     "done",
+                                             "print1", "printed",  "integer", "true1",
+                                             "main",   "answer12", "AbZ009"};
+    const auto                     tokens =
+        scanner.Tokenize("do print do1 done print1 printed integer true1 main answer12 AbZ009");
     ASSERT_EQ(tokens.size(), spellings.size());
     for (std::size_t index = 0; index < tokens.size(); ++index) {
         EXPECT_EQ(tokens[index].lexeme, spellings[index]);
@@ -143,16 +141,14 @@ TEST_F(LexerTest, RetainsAndDiagnosesWholeInvalidIdentifiers) {
 }
 
 TEST_F(LexerTest, InvalidDiagnosticsAndTokensShareLocationsAcrossTrivia) {
-    const auto tokens = scanner.Tokenize(
-        "/* first\nsecond */\n  _x 3.14 // skip a1b 1e3\nanswer12\n\ta1b 1e3");
+    const auto tokens =
+        scanner.Tokenize("/* first\nsecond */\n  _x 3.14 // skip a1b 1e3\nanswer12\n\ta1b 1e3");
     std::ostringstream reports;
     diag.Print(reports);
     ASSERT_EQ(tokens.size(), 5U);
-    const std::vector<std::pair<int, int>> positions{
-        {3, 3}, {3, 6}, {4, 1}, {5, 2}, {5, 6}};
-    const std::vector<lexer::TokenKind> kinds{
-        lexer::TokenKind::invalid_identifier,
-        lexer::TokenKind::invalid_numeric_constant,
+    const std::vector<std::pair<int, int>> positions{{3, 3}, {3, 6}, {4, 1}, {5, 2}, {5, 6}};
+    const std::vector<lexer::TokenKind>    kinds{
+        lexer::TokenKind::invalid_identifier, lexer::TokenKind::invalid_numeric_constant,
         lexer::TokenKind::identifier, lexer::TokenKind::invalid_identifier,
         lexer::TokenKind::invalid_numeric_constant};
     for (std::size_t index = 0; index < tokens.size(); ++index) {
@@ -169,10 +165,9 @@ TEST_F(LexerTest, InvalidDiagnosticsAndTokensShareLocationsAcrossTrivia) {
 }
 
 TEST_F(LexerTest, IntegerSpellingsArePreservedWithoutRangeChecking) {
-    const std::vector<std::string> spellings{
-        "0", "00042", "99999999999999999999999999999999999999"};
-    const auto tokens =
-        scanner.Tokenize("0 00042 99999999999999999999999999999999999999");
+    const std::vector<std::string> spellings{"0", "00042",
+                                             "99999999999999999999999999999999999999"};
+    const auto tokens = scanner.Tokenize("0 00042 99999999999999999999999999999999999999");
     ASSERT_EQ(tokens.size(), spellings.size());
     for (std::size_t index = 0; index < tokens.size(); ++index) {
         EXPECT_EQ(tokens[index].kind, lexer::TokenKind::numeric_constant);

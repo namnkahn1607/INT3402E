@@ -12,8 +12,7 @@ ast::StmtPtr Parser::ParseStatement() {
         case TokenKind::kw_int:
         case TokenKind::kw_bool: {
             auto declaration = ParseDeclaration();
-            if (!declaration ||
-                !ExpectTerminator("expected ';' after declaration")) {
+            if (!declaration || !ExpectTerminator("expected ';' after declaration")) {
                 return nullptr;
             }
             return std::make_unique<ast::DeclStmt>(loc, std::move(declaration));
@@ -25,31 +24,25 @@ ast::StmtPtr Parser::ParseStatement() {
         case TokenKind::l_brace: return ParseBlock();
         case TokenKind::identifier: {
             auto assignment = ParseAssignment();
-            if (!assignment ||
-                !ExpectTerminator("expected ';' after declaration")) {
+            if (!assignment || !ExpectTerminator("expected ';' after declaration")) {
                 return nullptr;
             }
             return assignment;
         }
-        default:
-            cursor_.ReportSyntaxError(loc, "expected a supported statement");
-            return nullptr;
+        default: cursor_.ReportSyntaxError(loc, "expected a supported statement"); return nullptr;
     }
 }
 
 std::unique_ptr<ast::AssignStmt> Parser::ParseAssignment() {
     const auto* name_token = cursor_.PeekToken();
     if (name_token == nullptr || name_token->kind != TokenKind::identifier) {
-        cursor_.ReportSyntaxError(cursor_.CurrentLocation(),
-                                  "expected a valid assignment target");
+        cursor_.ReportSyntaxError(cursor_.CurrentLocation(), "expected a valid assignment target");
         return nullptr;
     }
     const auto location = name_token->loc;
-    auto       target =
-        std::make_unique<ast::DeclRefExpr>(location, name_token->lexeme);
+    auto       target   = std::make_unique<ast::DeclRefExpr>(location, name_token->lexeme);
     cursor_.Consume();
-    if (!cursor_.Expect(TokenKind::equal,
-                        "expected '=' after assignment target")) {
+    if (!cursor_.Expect(TokenKind::equal, "expected '=' after assignment target")) {
         return nullptr;
     }
 
@@ -57,8 +50,7 @@ std::unique_ptr<ast::AssignStmt> Parser::ParseAssignment() {
     if (value == nullptr) {
         return nullptr;
     }
-    return std::make_unique<ast::AssignStmt>(location, std::move(target),
-                                             std::move(value));
+    return std::make_unique<ast::AssignStmt>(location, std::move(target), std::move(value));
 }
 
 std::unique_ptr<ast::CompoundStmt> Parser::ParseBlock() {
@@ -87,9 +79,7 @@ ast::StmtPtr Parser::ParsePrintStatement() {
         return nullptr;
     }
     auto value = expr_parser_.ParseExpression();
-    if (!value ||
-        !cursor_.Expect(TokenKind::r_paren,
-                        "expected ')' after print expression") ||
+    if (!value || !cursor_.Expect(TokenKind::r_paren, "expected ')' after print expression") ||
         !ExpectTerminator("expected ';' after print")) {
         return nullptr;
     }
@@ -102,8 +92,7 @@ ast::StmtPtr Parser::ParseIfStatement() {
         return nullptr;
     }
     auto condition = expr_parser_.ParseExpression();
-    if (!condition || !cursor_.Expect(TokenKind::r_paren,
-                                      "expected ')' after if condition")) {
+    if (!condition || !cursor_.Expect(TokenKind::r_paren, "expected ')' after if condition")) {
         return nullptr;
     }
     auto then_branch = ParseBlock();
@@ -117,29 +106,23 @@ ast::StmtPtr Parser::ParseIfStatement() {
             return nullptr;
         }
     }
-    return std::make_unique<ast::IfStmt>(loc, std::move(condition),
-                                         std::move(then_branch),
+    return std::make_unique<ast::IfStmt>(loc, std::move(condition), std::move(then_branch),
                                          std::move(else_branch));
 }
 
 ast::StmtPtr Parser::ParseDoWhileStatement() {
     const auto loc  = cursor_.Consume()->loc;  // Dispatch matched kw_do.
     auto       body = ParseBlock();
-    if (!body ||
-        !cursor_.Expect(TokenKind::kw_while,
-                        "expected 'while' after do body") ||
+    if (!body || !cursor_.Expect(TokenKind::kw_while, "expected 'while' after do body") ||
         !cursor_.Expect(TokenKind::l_paren, "expected '(' after while")) {
         return nullptr;
     }
     auto condition = expr_parser_.ParseExpression();
-    if (!condition ||
-        !cursor_.Expect(TokenKind::r_paren,
-                        "expected ')' after do condition") ||
+    if (!condition || !cursor_.Expect(TokenKind::r_paren, "expected ')' after do condition") ||
         !ExpectTerminator("expected ';' after do/while")) {
         return nullptr;
     }
-    return std::make_unique<ast::DoWhileStmt>(loc, std::move(body),
-                                              std::move(condition));
+    return std::make_unique<ast::DoWhileStmt>(loc, std::move(body), std::move(condition));
 }
 
 ast::StmtPtr Parser::ParseForStatement() {
@@ -149,14 +132,12 @@ ast::StmtPtr Parser::ParseForStatement() {
     }
     ast::ForInit init;
     const auto   init_loc = cursor_.CurrentLocation();
-    if (cursor_.PeekKind() == TokenKind::kw_int ||
-        cursor_.PeekKind() == TokenKind::kw_bool) {
+    if (cursor_.PeekKind() == TokenKind::kw_int || cursor_.PeekKind() == TokenKind::kw_bool) {
         auto declaration = ParseDeclaration();
         if (!declaration) {
             return nullptr;
         }
-        init =
-            std::make_unique<ast::DeclStmt>(init_loc, std::move(declaration));
+        init = std::make_unique<ast::DeclStmt>(init_loc, std::move(declaration));
     } else {
         auto assignment = ParseAssignment();
         if (!assignment) {
@@ -164,27 +145,23 @@ ast::StmtPtr Parser::ParseForStatement() {
         }
         init = std::move(assignment);
     }
-    if (!cursor_.Expect(TokenKind::semi,
-                        "expected ';' after for initializer")) {
+    if (!cursor_.Expect(TokenKind::semi, "expected ';' after for initializer")) {
         return nullptr;
     }
     auto condition = expr_parser_.ParseExpression();
-    if (!condition ||
-        !cursor_.Expect(TokenKind::semi, "expected ';' after for condition")) {
+    if (!condition || !cursor_.Expect(TokenKind::semi, "expected ';' after for condition")) {
         return nullptr;
     }
     auto step = ParseAssignment();
-    if (!step ||
-        !cursor_.Expect(TokenKind::r_paren, "expected ')' after for update")) {
+    if (!step || !cursor_.Expect(TokenKind::r_paren, "expected ')' after for update")) {
         return nullptr;
     }
     auto body = ParseBlock();
     if (!body) {
         return nullptr;
     }
-    return std::make_unique<ast::ForStmt>(loc, std::move(init),
-                                          std::move(condition), std::move(step),
-                                          std::move(body));
+    return std::make_unique<ast::ForStmt>(loc, std::move(init), std::move(condition),
+                                          std::move(step), std::move(body));
 }
 
 }  // namespace parser

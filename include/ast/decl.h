@@ -10,10 +10,7 @@
 
 namespace ast {
 
-enum class Type : std::uint8_t {
-    Bool,
-    Int,
-};
+enum class Type : std::uint8_t { Bool, Int };
 
 struct Decl;
 using DeclPtr = std::unique_ptr<Decl>;

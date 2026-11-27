@@ -12,12 +12,7 @@ namespace ast {
 struct Expr;
 using ExprPtr = std::unique_ptr<Expr>;
 
-enum class ExprKind : std::uint8_t {
-    IntLiteral,
-    BoolLiteral,
-    DeclRef,
-    Binary,
-};
+enum class ExprKind : std::uint8_t { IntLiteral, BoolLiteral, DeclRef, Binary };
 
 struct Expr {
     ExprKind         kind;

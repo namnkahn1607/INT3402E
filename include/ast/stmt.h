@@ -15,15 +15,7 @@ namespace ast {
 struct Stmt;
 using StmtPtr = std::unique_ptr<Stmt>;
 
-enum class StmtKind : std::uint8_t {
-    Compound,
-    Decl,
-    Assign,
-    If,
-    DoWhile,
-    For,
-    Print,
-};
+enum class StmtKind : std::uint8_t { Compound, Decl, Assign, If, DoWhile, For, Print };
 
 struct Stmt {
     StmtKind         kind;

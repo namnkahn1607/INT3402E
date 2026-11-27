@@ -38,14 +38,14 @@ printf 'int answer = 42;\n' | ./build/debug/src/int3402e
 ./build/debug/src/int3402e <source-file.cpp>
 ```
 
-It prints tokens to stdout and diagnostics to stderr.
+It prints diagnostic messages to stderr.
 
-## Current parser syntax
+## Current focus
 
 For the supported context-free grammar (CFG), see [docs/CFG.md](docs/CFG.md).
 
 The parser library accepts declarations and statements directly, without a
-function or outer-block wrapper:ss
+function or outer-block wrapper:
 
 ```cpp
 int x = 1;
@@ -61,9 +61,6 @@ preserves source order, with variable declarations wrapped in `DeclStmt`.
 See the [syntax-analysis specification](openspec/specs/syntax-analysis/spec.md)
 for the authoritative grammar and remaining restrictions.
 
-The CLI remains lexer-only. Semantic analysis, execution, and code generation
-are not delivered by the parser.
-
 ## Build details
 
 Presets must be selected explicitly. Use `release` for an optimized build.
@@ -74,9 +71,6 @@ fresh build directory.
 Tests download GoogleTest **v1.18.0** on first configure. Builds reuse the
 downloaded source.
 
-Unit test are colocated within the module it belongs to in [src](src/) - see
-[Layout](#source-layout) below. E2E or integration test are put at [tests](tests/).
-
 Build without GoogleTest:
 
 ```sh
@@ -84,7 +78,7 @@ cmake -S . -B build/no-tests -G Ninja -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Rel
 cmake --build build/no-tests --parallel
 ```
 
-## Source layout
+## Layout
 
 Module                 | Pipeline
 ---------------------- | ----------------------------------------
@@ -93,7 +87,6 @@ Module                 | Pipeline
 [parser](src/parser)   | Token stream -> AST
 [sema](src/sema)       | Semantic analysis / AST type checking
 [ir](src/ir)           | Intermediate representation
-[opt](src/opt)         | Optimizations
 [codegen](src/codegen) | IR -> RISC-V assembly
 [common](src/common)   | Shared utility: diagnostic, reporting...
 

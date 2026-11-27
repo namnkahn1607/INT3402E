@@ -5,6 +5,7 @@ bin/
 build/
 out/
 
+.clangd
 .env
 .neocmakelint.toml
 compile_commands.json
